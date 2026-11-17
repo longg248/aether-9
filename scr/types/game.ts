@@ -99,6 +99,8 @@ export interface DroneEntity {
   cargoType: ResourceType | null;
   cargoAmount: number;
   propellerAngle: number;
+  /** Free node this drone reserved after its drill's node depleted. */
+  targetNodeId?: string | null;
 }
 
 export interface EnemyEntity {
@@ -219,6 +221,10 @@ export interface HudSnapshot {
   stormActive: boolean;
   waveTimer: number;
   waveCount: number;
+  /** Live enemy count for the threat indicator. */
+  enemiesAlive: number;
+  /** Automation overview: hauling = carrying cargo, idle = no available task. */
+  drones: { total: number; hauling: number; idle: number };
   bossActive: boolean;
   bossHp: number;
   bossMaxHp: number;

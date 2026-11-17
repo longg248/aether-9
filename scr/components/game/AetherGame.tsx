@@ -351,6 +351,22 @@ export default function AetherGame() {
             </div>
           </div>
 
+          {hud.drones.total > 0 && (
+            <div
+              className="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-xs backdrop-blur-md"
+              title={`Tổng ${hud.drones.total} Drone · ${hud.drones.hauling} đang chở hàng · ${hud.drones.idle} chờ việc (mỏ cạn hoặc hết nhiệm vụ)`}
+            >
+              <span className="text-slate-400">Drone: </span>
+              <span className="font-mono font-bold text-sky-300">{hud.drones.total}</span>
+              <span className="text-slate-500"> · </span>
+              <span className="font-mono text-emerald-300">{hud.drones.hauling} chở</span>
+              <span className="text-slate-500"> · </span>
+              <span className={`font-mono ${hud.drones.idle > 0 ? 'text-amber-300' : 'text-slate-400'}`}>
+                {hud.drones.idle} chờ
+              </span>
+            </div>
+          )}
+
           <div className="flex flex-col gap-1.5 rounded-xl border border-slate-800/80 bg-slate-950/80 p-3 backdrop-blur-md">
             <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider text-sky-400">
               <Radio className="h-3.5 w-3.5" />

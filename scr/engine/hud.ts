@@ -20,6 +20,12 @@ export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
     stormActive: engine.stormActive,
     waveTimer: Math.ceil(engine.waveTimer),
     waveCount: engine.waveCount,
+    enemiesAlive: engine.enemies.length,
+    drones: {
+      total: engine.drones.length,
+      hauling: engine.drones.filter((d) => d.cargoAmount > 0).length,
+      idle: engine.drones.filter((d) => d.state === 'idle').length,
+    },
     bossActive: Boolean(boss),
     bossHp: boss ? Math.max(0, Math.round(boss.hp)) : 0,
     bossMaxHp: boss ? boss.maxHp : 1,
