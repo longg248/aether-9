@@ -71,8 +71,17 @@ export function drawDrones(engine: AetherGameEngine, ctx: CanvasRenderingContext
     ctx.arc(0, 0, 6, 0, Math.PI * 2);
     ctx.fill();
 
-    // Quad rotors
-    ctx.strokeStyle = '#38bdf8';
+    // Cargo pod tinted by resource type so hauling is readable at a glance.
+    if (d.cargoAmount > 0 && d.cargoType) {
+      ctx.fillStyle =
+        d.cargoType === 'silicate' ? '#fb923c' : d.cargoType === 'iron' ? '#38bdf8' : '#c084fc';
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Quad rotors (dimmed while idle: no available task)
+    ctx.strokeStyle = d.state === 'idle' ? '#64748b' : '#38bdf8';
     ctx.lineWidth = 1.5;
     for (const [rx, ry] of [
       [-8, -8],

@@ -1,4 +1,5 @@
 import type { AetherGameEngine } from '@/engine/gameEngine';
+import { hasLivingLab } from '@/engine/systems/buildingSystem';
 import { HudSnapshot } from '@/types/game';
 
 export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
@@ -11,6 +12,7 @@ export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
     warpSurplus: Math.max(0, engine.resources.aether - engine.aetherReserve),
     energyProd: energy.prod,
     energyUse: energy.use,
+    energyEfficiency: energy.efficiency,
     hubHp: Math.round(engine.hubHp),
     hubMaxHp: engine.hubMaxHp,
     warpProgress: engine.warpProgress,
@@ -19,12 +21,18 @@ export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
     stormActive: engine.stormActive,
     waveTimer: Math.ceil(engine.waveTimer),
     waveCount: engine.waveCount,
+    enemiesAlive: engine.enemies.length,
+    drones: {
+      total: engine.drones.length,
+      hauling: engine.drones.filter((d) => d.cargoAmount > 0).length,
+      idle: engine.drones.filter((d) => d.state === 'idle').length,
+    },
     bossActive: Boolean(boss),
     bossHp: boss ? Math.max(0, Math.round(boss.hp)) : 0,
     bossMaxHp: boss ? boss.maxHp : 1,
     dayTime: engine.dayTime,
     upgrades: { ...engine.upgrades },
-    hasLab: engine.buildings.some((b) => b.type === 'lab'),
+    hasLab: hasLivingLab(engine.buildings),
     skills: {
       dashCd: Number(engine.rover.dashCooldown.toFixed(1)),
       empCd: Number(engine.rover.empCooldown.toFixed(1)),

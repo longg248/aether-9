@@ -28,6 +28,7 @@ import {
   UPGRADES,
 } from '@/constants/gameConfig';
 import { AetherGameEngine } from '@/engine/gameEngine';
+import { getUpgradeCost, getUpgradeState } from '@/engine/systems/buildingSystem';
 import { clearHeldKeys, handleKeyDown, handleKeyUp } from '@/engine/systems/inputSystem';
 import { BuildingType, GameSpeed, GameStatus, HudSnapshot } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
@@ -246,9 +247,18 @@ export default function AetherGame() {
                 className={`font-mono text-xs font-bold ${
                   hud.energyProd >= hud.energyUse ? 'text-emerald-400' : 'text-rose-400'
                 }`}
+                title={`Sản xuất ${hud.energyProd} MW · Tiêu thụ ${hud.energyUse} MW · Hiệu suất lưới ${Math.round(hud.energyEfficiency * 100)}%`}
               >
                 {hud.energyProd}/{hud.energyUse} MW
               </span>
+              {hud.energyEfficiency < 1 && (
+                <span
+                  className="animate-pulse font-mono text-[10px] font-bold text-rose-400"
+                  title="Thiếu điện: công trình & Drone hoạt động chậm. Xây thêm Pin Mặt Trời [1]."
+                >
+                  ! {Math.round(hud.energyEfficiency * 100)}%
+                </span>
+              )}
             </div>
           </div>
 
@@ -336,11 +346,33 @@ export default function AetherGame() {
                 {hud.stormActive ? 'ĐANG ĐỔ BỘ!' : `${hud.stormTimer}s`}
               </span>
             </div>
-            <div className="flex-1 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-xs backdrop-blur-md">
-              <span className="text-slate-400">Quái vật: </span>
+            <div
+              className="flex-1 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-xs backdrop-blur-md"
+              title={`Đợt tiếp theo sau ${hud.waveTimer}s · Đã qua ${hud.waveCount} đợt · ${hud.enemiesAlive} Bọ Tinh Thể còn sống`}
+            >
+              <span className="text-slate-400">Đợt {hud.waveCount + 1}: </span>
               <span className="font-mono font-bold text-amber-300">{hud.waveTimer}s</span>
+              {hud.enemiesAlive > 0 && (
+                <span className="font-mono font-bold text-rose-400"> · {hud.enemiesAlive} bọ</span>
+              )}
             </div>
           </div>
+
+          {hud.drones.total > 0 && (
+            <div
+              className="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-xs backdrop-blur-md"
+              title={`Tổng ${hud.drones.total} Drone · ${hud.drones.hauling} đang chở hàng · ${hud.drones.idle} chờ việc (mỏ cạn hoặc hết nhiệm vụ)`}
+            >
+              <span className="text-slate-400">Drone: </span>
+              <span className="font-mono font-bold text-sky-300">{hud.drones.total}</span>
+              <span className="text-slate-500"> · </span>
+              <span className="font-mono text-emerald-300">{hud.drones.hauling} chở</span>
+              <span className="text-slate-500"> · </span>
+              <span className={`font-mono ${hud.drones.idle > 0 ? 'text-amber-300' : 'text-slate-400'}`}>
+                {hud.drones.idle} chờ
+              </span>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5 rounded-xl border border-slate-800/80 bg-slate-950/80 p-3 backdrop-blur-md">
             <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider text-sky-400">
@@ -382,9 +414,15 @@ export default function AetherGame() {
           <div className="flex flex-col gap-2.5">
             {UPGRADES.map((u) => {
               const lvl = hud.upgrades[u.id] || 0;
-              const maxed = lvl >= u.maxLevel;
-              const locked = Boolean(u.reqLab && !hud.hasLab);
-              const mult = Math.pow(1.45, lvl);
+              const state = getUpgradeState(u.id, hud.upgrades, hud.resources, hud.hasLab);
+              const maxed = state === 'maxed';
+              const locked = state === 'locked';
+              const cost = getUpgradeCost(u, lvl);
+              const costParts = [
+                { key: 'silicate', label: 'Sil', value: cost.silicate },
+                { key: 'iron', label: 'Sắt', value: cost.iron },
+                { key: 'aether', label: 'Aeth', value: cost.aether },
+              ].filter((p) => p.value > 0);
               return (
                 <div key={u.id} className="rounded-xl border border-slate-800 bg-slate-900/80 p-3">
                   <div className="flex items-center justify-between">
@@ -396,22 +434,37 @@ export default function AetherGame() {
                   <p className="mt-1 text-[11px] text-slate-400">{u.desc}</p>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="font-mono text-[11px] text-slate-300">
-                      {maxed
-                        ? 'ĐÃ TỐI ĐA'
-                        : [
-                            u.cost.silicate ? `${Math.round(u.cost.silicate * mult)} Sil` : '',
-                            u.cost.iron ? `${Math.round(u.cost.iron * mult)} Sắt` : '',
-                            u.cost.aether ? `${Math.round(u.cost.aether * mult)} Aeth` : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
+                      {maxed ? (
+                        'ĐÃ TỐI ĐA'
+                      ) : (
+                        costParts.map((p, i) => (
+                          <span key={p.key}>
+                            {i > 0 && <span className="text-slate-500"> · </span>}
+                            <span
+                              className={
+                                hud.resources[p.key as keyof typeof hud.resources] < p.value
+                                  ? 'text-rose-400'
+                                  : 'text-slate-300'
+                              }
+                            >
+                              {p.value} {p.label}
+                            </span>
+                          </span>
+                        ))
+                      )}
                     </span>
                     <button
-                      disabled={maxed || locked}
+                      disabled={state !== 'affordable'}
                       onClick={() => engineRef.current?.buyUpgrade(u.id)}
                       className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
                     >
-                      {locked ? 'Cần Phòng NC [7]' : maxed ? 'Max' : 'Nâng cấp'}
+                      {locked
+                        ? 'Cần Phòng NC [7]'
+                        : maxed
+                        ? 'Max'
+                        : state === 'unaffordable'
+                        ? 'Thiếu tài nguyên'
+                        : 'Nâng cấp'}
                     </button>
                   </div>
                 </div>
@@ -517,16 +570,21 @@ export default function AetherGame() {
           <div className="pointer-events-auto flex flex-wrap justify-center gap-2 rounded-2xl border border-slate-800/90 bg-slate-950/90 p-2.5 shadow-2xl backdrop-blur-md">
             {BUILDING_LIST.map((b) => {
               const active = selectedBuild === b.id;
+              const affordable =
+                hud.resources.silicate >= (b.cost.silicate || 0) &&
+                hud.resources.iron >= (b.cost.iron || 0) &&
+                hud.resources.aether >= (b.cost.aether || 0);
               return (
                 <button
                   key={b.id}
                   onClick={() => handleSelectBuild(b.id)}
-                  title={b.desc}
+                  disabled={!affordable}
+                  title={affordable ? b.desc : `Không đủ tài nguyên · ${b.desc}`}
                   className={`flex w-36 flex-col items-start rounded-xl border p-2 text-left transition ${
                     active
                       ? 'border-sky-400 bg-sky-950/80 ring-2 ring-sky-400/40'
                       : 'border-slate-800 bg-slate-900/80 hover:border-slate-600'
-                  }`}
+                  } disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-800`}
                 >
                   <div className="flex w-full items-center justify-between">
                     <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-300">

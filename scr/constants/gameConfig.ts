@@ -147,7 +147,7 @@ export const UPGRADES: UpgradeConfig[] = [
     cost: { silicate: 100, iron: 80, aether: 45 },
     maxLevel: 4,
     reqLab: true,
-    desc: '+400 giáp tối đa Trung tâm & giảm 35% sát thương Bão Từ.',
+    desc: '+400 giáp tối đa Trung tâm & giảm 20% sát thương Bão Từ mỗi cấp.',
   },
   {
     id: 'aether_capacitor',
@@ -155,7 +155,7 @@ export const UPGRADES: UpgradeConfig[] = [
     cost: { iron: 130, aether: 90 },
     maxLevel: 4,
     reqLab: true,
-    desc: 'Tăng 45% tốc độ nạp Aether vào Động cơ Bước Nhảy.',
+    desc: '+45% tốc độ nạp Aether vào Động cơ Bước Nhảy mỗi cấp.',
   },
 ];
 

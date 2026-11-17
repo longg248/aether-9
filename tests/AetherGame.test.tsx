@@ -207,3 +207,38 @@ describe('AetherGame: animation loop and listener lifecycle', () => {
     expect(engine.elapsed).toBeGreaterThan(0);
   });
 });
+
+describe('AetherGame: tech panel purchase states', () => {
+  it('shows unaffordable and locked upgrades as disabled with clear labels', async () => {
+    render(<AetherGame />);
+    startGame();
+    fireEvent.keyDown(window, { key: 't' });
+
+    // Starting resources (90 Sil / 45 Sắt / 0 Aeth): the three non-lab upgrades
+    // are unaffordable, the two lab-gated ones are locked.
+    const unaffordable = await screen.findAllByRole('button', { name: 'Thiếu tài nguyên' });
+    expect(unaffordable).toHaveLength(3);
+    for (const btn of unaffordable) expect((btn as HTMLButtonElement).disabled).toBe(true);
+
+    const locked = screen.getAllByRole('button', { name: 'Cần Phòng NC [7]' });
+    expect(locked).toHaveLength(2);
+    for (const btn of locked) expect((btn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('enables purchases when affordable and buying deducts the scaled cost', async () => {
+    render(<AetherGame />);
+    startGame();
+    const engine = getEngine();
+    engine.nodes = []; // no auto-mining income: cost deduction stays exact
+    engine.resources = { silicate: 500, iron: 500, aether: 500 };
+    fireEvent.keyDown(window, { key: 't' });
+
+    const buyButtons = await screen.findAllByRole('button', { name: 'Nâng cấp' });
+    expect(buyButtons).toHaveLength(3); // lab-gated upgrades stay locked
+    fireEvent.click(buyButtons[0]); // rover_laser: level 1 -> 2 costs 87 Sil / 58 Sắt
+
+    expect(engine.upgrades.rover_laser).toBe(2);
+    expect(engine.resources.silicate).toBe(500 - 87);
+    expect(engine.resources.iron).toBe(500 - 58);
+  });
+});

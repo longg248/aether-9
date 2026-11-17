@@ -48,7 +48,8 @@ export function updateWarpProgress(engine: AetherGameEngine, dt: number): void {
   // above the configurable reserve, keeping Aether available for upgrades.
   const available = engine.resources.aether - engine.aetherReserve;
   if (available > 0 && engine.warpProgress < TARGET_WARP_AETHER) {
-    const rate = (12 + engine.upgrades.aether_capacitor * 6) * dt;
+    // +45% charge rate per capacitor level, matching the tech tree description.
+    const rate = 12 * (1 + engine.upgrades.aether_capacitor * 0.45) * dt;
     const transfer = Math.min(available, rate, TARGET_WARP_AETHER - engine.warpProgress);
     engine.resources.aether -= transfer;
     engine.warpProgress += transfer;
@@ -64,6 +65,15 @@ export function updateWarpProgress(engine: AetherGameEngine, dt: number): void {
       break;
     }
   }
+}
+
+/**
+ * Fraction of storm damage that reaches the Hub: 20% reduction per Shield
+ * Matrix level, down to 20% incoming at max level 4 (80% reduction) — exactly
+ * as the upgrade description advertises. No hidden damage floor.
+ */
+export function getStormDamageMultiplier(shieldLevel: number): number {
+  return Math.max(0, 1 - shieldLevel * 0.2);
 }
 
 export function updateStorms(engine: AetherGameEngine, dt: number): void {
@@ -93,7 +103,7 @@ export function updateStorms(engine: AetherGameEngine, dt: number): void {
         life: 0.25,
         maxLife: 0.25,
       });
-      const resist = Math.max(0.25, 1 - engine.upgrades.shield_matrix * 0.2);
+      const resist = getStormDamageMultiplier(engine.upgrades.shield_matrix);
       engine.hubHp -= 18 * resist;
     }
     if (engine.stormDuration <= 0) {
