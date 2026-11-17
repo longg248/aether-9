@@ -176,12 +176,19 @@ describe('droneSystem: invalid state recovery', () => {
     drone.state = 'to_node'; // invalid: has cargo but heading to node
     drone.cargoType = 'aether';
     drone.cargoAmount = 7;
+    node.amount = 0; // depleted: the 7 cargo is the only possible delivery
     const before = engine.resources.aether;
 
     run(engine, 30);
 
-    expect(engine.resources.aether).toBeGreaterThanOrEqual(before + 7);
-    expect(drone.cargoType === null || drone.cargoAmount > 0).toBe(true);
+    // Exact-once delivery: not "at least 7", which would mask duplicates.
+    expect(engine.resources.aether).toBe(before + 7);
+    expect(drone.cargoAmount).toBe(0);
+    expect(drone.cargoType).toBeNull();
+
+    run(engine, 30); // keep simulating: nothing more may be delivered
+    expect(engine.resources.aether).toBe(before + 7);
+    expect(drone.state).toBe('idle');
   });
 
   it('handles a to_hub drone with no cargo without delivering phantom resources', () => {
