@@ -147,11 +147,16 @@ export function placeBuilding(engine: AetherGameEngine, gx: number, gy: number, 
   return true;
 }
 
+/** A Lab only unlocks research while it is alive — shared by engine and HUD. */
+export function hasLivingLab(buildings: BuildingEntity[]): boolean {
+  return buildings.some((b) => b.type === 'lab' && b.hp > 0);
+}
+
 export function buyUpgrade(engine: AetherGameEngine, id: string): void {
   const upg = UPGRADES.find((u) => u.id === id);
   if (!upg) return;
   const lvl = engine.upgrades[id] || 0;
-  const hasLab = engine.buildings.some((b) => b.type === 'lab');
+  const hasLab = hasLivingLab(engine.buildings);
   const state = getUpgradeState(id, engine.upgrades, engine.resources, hasLab);
 
   if (state === 'locked') {
@@ -188,6 +193,7 @@ export function triggerQuickRepair(engine: AetherGameEngine): void {
   engine.resources.iron -= 15;
   engine.hubHp = Math.min(engine.hubMaxHp, engine.hubHp + 260);
   for (const b of engine.buildings) {
+    if (b.hp <= 0) continue; // destroyed buildings are never resurrected
     b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.45);
   }
   soundEngine.pickup();
@@ -243,7 +249,7 @@ export function updateBuildings(engine: AetherGameEngine, dt: number, efficiency
       b.cooldown = 1.2;
       const range = (BUILDINGS.repair_bay.radius || 5) * TILE_SIZE;
       for (const ally of engine.buildings) {
-        if (ally.hp < ally.maxHp && Math.hypot(ally.x - b.x, ally.y - b.y) <= range) {
+        if (ally.hp > 0 && ally.hp < ally.maxHp && Math.hypot(ally.x - b.x, ally.y - b.y) <= range) {
           ally.hp = Math.min(ally.maxHp, ally.hp + 18);
           engine.lasers.push({
             x1: b.x,
