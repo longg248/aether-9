@@ -9,6 +9,10 @@ export const HUB_X = (HUB_GX + 0.5) * TILE_SIZE;
 export const HUB_Y = (HUB_GY + 0.5) * TILE_SIZE;
 export const TARGET_WARP_AETHER = 1200;
 
+// Fixed world seed: POI layout is deterministic across runs (resource nodes
+// stay per-run random). Change only with a deliberate world-layout rebalance.
+export const WORLD_SEED = 90321;
+
 // Aether kept back from the Warp Engine so upgrades/buildings stay affordable.
 export const DEFAULT_AETHER_RESERVE = 150;
 export const AETHER_RESERVE_MIN = 0;
@@ -22,6 +26,9 @@ export const ACID_POOL_RADIUS = 26;
 export const ACID_POOL_LIFE = 5;
 export const ACID_POOL_DPS = 6;
 export const ACID_TICK_INTERVAL = 0.5;
+
+// Smelter input per conversion cycle — shared by production and objectives.
+export const SMELTER_BATCH_SILICATE = 8;
 
 export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   solar: {

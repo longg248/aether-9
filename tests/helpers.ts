@@ -16,8 +16,9 @@ const nextId = (prefix: string) => `${prefix}_test_${uid++}`;
 export function makeEngine(): AetherGameEngine {
   const engine = new AetherGameEngine();
   engine.status = 'playing';
-  // Deterministic baseline: no random nodes/waves interfere with assertions.
+  // Deterministic baseline: no random nodes/waves/POIs interfere with assertions.
   engine.nodes = [];
+  engine.pois = [];
   engine.waveTimer = 9999;
   engine.stormTimer = 9999;
   engine.podTimer = 9999;

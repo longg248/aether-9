@@ -10,6 +10,12 @@ export type BuildingType =
   | 'repair_bay';
 
 export type EnemyType = 'swarmer' | 'goliath' | 'spitter' | 'behemoth';
+export type PoiType =
+  | 'research_station'
+  | 'aether_deposit'
+  | 'signal_relay'
+  | 'crystal_nest'
+  | 'supply_cache';
 export type GameSpeed = 0 | 1 | 2;
 export type GameStatus = 'intro' | 'playing' | 'victory' | 'gameover';
 
@@ -90,6 +96,28 @@ export interface CrashPod {
   beaconPhase: number;
 }
 
+export interface PoiEntity {
+  id: string;
+  type: PoiType;
+  gx: number;
+  gy: number;
+  x: number;
+  y: number;
+  /** Tile has been revealed at least once (permanent discovery flag). */
+  discovered: boolean;
+  /** 0..1 channeling progress for the rover interaction. */
+  progress: number;
+  /** Terminal state: restored / activated / opened / harvested. Rewards fire once. */
+  completed: boolean;
+  /** Crystal nest only: the one-time ambush has been triggered. */
+  ambushSpawned: boolean;
+  /** Crystal nest only: ids of the spawned guards. */
+  guardIds: string[];
+  /** Crystal nest only: all guards dead — the nest becomes harvestable. */
+  guardsCleared: boolean;
+  beaconPhase: number;
+}
+
 export interface DroneEntity {
   id: string;
   drillId: string;
@@ -117,6 +145,14 @@ export interface EnemyEntity {
   stunTimer: number;
   hitFlash: number;
   angle: number;
+  /** Elite variant: boosted stats, guaranteed Aether drop, gold ring visual. */
+  elite?: boolean;
+  /** Heavy telegraph: seconds left before the winded-up strike lands. */
+  windupTimer?: number;
+  /** Total windup duration, for the telegraph progress visual. */
+  windupTotal?: number;
+  /** Building id the windup is aimed at (null = the Hub). Re-validated on landing. */
+  pendingTargetId?: string | null;
 }
 
 export interface Projectile {
@@ -228,6 +264,12 @@ export interface HudSnapshot {
   bossActive: boolean;
   bossHp: number;
   bossMaxHp: number;
+  /** Active milestone objective (null once the whole chain is completed). */
+  objective: { id: string; title: string; desc: string; progress: number; target: number } | null;
+  objectivesDone: number;
+  objectivesTotal: number;
+  /** Exploration overview: discovered vs total points of interest. */
+  poi: { discovered: number; total: number };
   dayTime: number;
   upgrades: Record<string, number>;
   hasLab: boolean;
