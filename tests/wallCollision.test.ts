@@ -241,6 +241,133 @@ describe('wall collision: several enemies on one section', () => {
   });
 });
 
+describe('wall collision: symmetric opposing normals', () => {
+  /** Strict single-frame check: clear of every intact wall at once. */
+  function expectClearOfAllWalls(engine: AetherGameEngine, enemy: EnemyEntity): void {
+    const minDist = enemy.radius + BUILDING_COLLISION_RADIUS;
+    for (const b of engine.buildings) {
+      if (b.type !== 'wall' || b.hp <= 0) continue;
+      expect(Math.hypot(enemy.x - b.x, enemy.y - b.y)).toBeGreaterThanOrEqual(minDist - 0.001);
+    }
+  }
+
+  it('enemy exactly between two adjacent intact walls ends clear of both', () => {
+    const engine = makeEngine();
+    const left = makeBuilding('wall', 21, 18, 480);
+    const right = makeBuilding('wall', 22, 18, 480);
+    engine.buildings.push(left, right);
+    // Exact midpoint: the two collision normals are equal and opposite.
+    const enemy = makeEnemy('swarmer', (left.x + right.x) / 2, left.y);
+    engine.enemies.push(enemy);
+
+    updateEnemies(engine, 0.05);
+
+    expectClearOfAllWalls(engine, enemy);
+  });
+
+  it('the same midpoint scenario after simulated knockback is resolved too', () => {
+    const engine = makeEngine();
+    const left = makeBuilding('wall', 21, 18, 480);
+    const right = makeBuilding('wall', 22, 18, 480);
+    engine.buildings.push(left, right);
+    const enemy = makeEnemy('goliath', HUB_X, 700);
+    engine.enemies.push(enemy);
+
+    updateEnemies(engine, 0.05); // one normal movement frame
+    // Simulated EMP knockback lands the enemy exactly between the walls.
+    enemy.x = (left.x + right.x) / 2;
+    enemy.y = left.y;
+
+    updateEnemies(engine, 0.05);
+
+    expectClearOfAllWalls(engine, enemy);
+  });
+
+  it('enemy knocked concentric with a wall inside a row escapes EVERY wall', () => {
+    const engine = makeEngine();
+    const row = [];
+    for (let gx = 20; gx <= 24; gx++) row.push(makeBuilding('wall', gx, 18, 480));
+    engine.buildings.push(...row);
+    const mid = row[2];
+    // Knocked exactly onto the wall center: push-out ping-pongs between the
+    // concentric wall and its right neighbour, cancelling progress.
+    const enemy = makeEnemy('swarmer', mid.x, mid.y);
+    engine.enemies.push(enemy);
+
+    updateEnemies(engine, 0.05);
+
+    expectClearOfAllWalls(engine, enemy);
+
+    // Behaviour preserved: it keeps fighting the row, and once the blocking
+    // section falls it moves on to the next target — no permanent trap.
+    const start = { x: enemy.x, y: enemy.y };
+    tick((dt) => {
+      updateEnemies(engine, dt);
+      expectNoPenetration(engine, enemy);
+    }, 90);
+    expect(row.some((w) => w.hp < 480)).toBe(true); // attacked the blocker
+    expect(row.some((w) => w.hp <= 0)).toBe(true); // broke a section
+    expect(Math.hypot(enemy.x - start.x, enemy.y - start.y)).toBeGreaterThan(5); // advanced after the breach
+  });
+
+  it('enemy at the exact center of a 2x2 wall block is pushed clear of all four', () => {
+    const engine = makeEngine();
+    const block = [
+      makeBuilding('wall', 21, 17, 480),
+      makeBuilding('wall', 22, 17, 480),
+      makeBuilding('wall', 21, 18, 480),
+      makeBuilding('wall', 22, 18, 480),
+    ];
+    engine.buildings.push(...block);
+    // Center of the block: four diagonal normals cancel pairwise.
+    const enemy = makeEnemy('swarmer', 22 * 48, 18 * 48);
+    engine.enemies.push(enemy);
+
+    updateEnemies(engine, 0.05);
+
+    expectClearOfAllWalls(engine, enemy);
+  });
+
+  it('a symmetric cross of four walls does not trap the enemy at its center', () => {
+    const engine = makeEngine();
+    const cx = 22.5 * 48;
+    const cy = 18.5 * 48;
+    const arms = [
+      makeBuilding('wall', 22, 18, 480),
+      makeBuilding('wall', 22, 18, 480),
+      makeBuilding('wall', 22, 18, 480),
+      makeBuilding('wall', 22, 18, 480),
+    ];
+    // Tight cross at ±24 (e.g. after repeated knockbacks): all four normals
+    // cancel exactly at the center.
+    const offsets = [
+      [24, 0],
+      [-24, 0],
+      [0, 24],
+      [0, -24],
+    ];
+    arms.forEach((w, i) => {
+      w.x = cx + offsets[i][0];
+      w.y = cy + offsets[i][1];
+    });
+    engine.buildings.push(...arms);
+    const enemy = makeEnemy('swarmer', cx, cy);
+    engine.enemies.push(enemy);
+
+    updateEnemies(engine, 0.05);
+    expectClearOfAllWalls(engine, enemy);
+
+    // It fights the cross from outside; when an arm falls it moves in.
+    tick((dt) => {
+      updateEnemies(engine, dt);
+      expectNoPenetration(engine, enemy);
+    }, 90);
+    expect(arms.some((w) => w.hp < 480)).toBe(true); // still attacks blockers
+    expect(arms.some((w) => w.hp <= 0)).toBe(true); // broke an arm
+    expect(Math.hypot(enemy.x - cx, enemy.y - cy)).toBeLessThan(60); // advanced into the cross
+  });
+});
+
 describe('wall collision: destroyed section inside a row', () => {
   it('a wrecked section neither blocks movement nor absorbs attacks', () => {
     const engine = makeEngine();

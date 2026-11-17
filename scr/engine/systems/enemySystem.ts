@@ -233,14 +233,61 @@ function resolveWallCollision(engine: AetherGameEngine, e: EnemyEntity): Buildin
     }
     if (!overlapping) break;
     const len = Math.hypot(nx, ny);
-    if (len < 0.001) {
-      e.x += e.radius + BUILDING_COLLISION_RADIUS; // opposing normals: escape along +x
-      break;
-    }
+    if (len < 0.001) break; // opposing normals cancel: verified escape below
     e.x += (nx / len) * 4;
     e.y += (ny / len) * 4;
   }
+  // The fast paths can stall: cancelled normals, or 4px nudges oscillating
+  // between adjacent walls. Guarantee a verified escape as the final step.
+  if (isOverlappingWalls(engine, e)) {
+    escapeVerified(engine, e);
+  }
   return blocker;
+}
+
+/** True while any intact wall still overlaps the enemy. */
+function isOverlappingWalls(engine: AetherGameEngine, e: EnemyEntity): boolean {
+  const minDist = e.radius + BUILDING_COLLISION_RADIUS;
+  return engine.buildings.some(
+    (b) => b.type === 'wall' && b.hp > 0 && Math.hypot(b.x - e.x, b.y - e.y) < minDist
+  );
+}
+
+/**
+ * Deterministic last-resort escape when pushes/nudges stall (e.g. an enemy
+ * symmetrically between walls whose collision normals cancel). Tries fixed
+ * candidate directions at increasing reach and commits only to a position
+ * verified clear of EVERY intact wall — a blind one-direction shove can land
+ * inside the neighbouring wall.
+ */
+function escapeVerified(engine: AetherGameEngine, e: EnemyEntity): void {
+  const minDist = e.radius + BUILDING_COLLISION_RADIUS;
+  const dirs: ReadonlyArray<readonly [number, number]> = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [Math.SQRT1_2, Math.SQRT1_2],
+    [Math.SQRT1_2, -Math.SQRT1_2],
+    [-Math.SQRT1_2, Math.SQRT1_2],
+    [-Math.SQRT1_2, -Math.SQRT1_2],
+  ];
+  for (let reach = 1; reach <= 32; reach++) {
+    for (const [dx, dy] of dirs) {
+      const x = e.x + dx * minDist * reach;
+      const y = e.y + dy * minDist * reach;
+      const clear = engine.buildings.every(
+        (b) => b.type !== 'wall' || b.hp <= 0 || Math.hypot(b.x - x, b.y - y) >= minDist
+      );
+      if (clear) {
+        e.x = x;
+        e.y = y;
+        return;
+      }
+    }
+  }
+  // No verified position within reach (only possible inside a fully sealed
+  // wall shell): keep the last resolved position rather than teleport blindly.
 }
 
 function fireAcidProjectile(engine: AetherGameEngine, e: EnemyEntity): void {
