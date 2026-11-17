@@ -28,6 +28,7 @@ import {
   UPGRADES,
 } from '@/constants/gameConfig';
 import { AetherGameEngine } from '@/engine/gameEngine';
+import { getUpgradeCost, getUpgradeState } from '@/engine/systems/buildingSystem';
 import { clearHeldKeys, handleKeyDown, handleKeyUp } from '@/engine/systems/inputSystem';
 import { BuildingType, GameSpeed, GameStatus, HudSnapshot } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
@@ -413,9 +414,15 @@ export default function AetherGame() {
           <div className="flex flex-col gap-2.5">
             {UPGRADES.map((u) => {
               const lvl = hud.upgrades[u.id] || 0;
-              const maxed = lvl >= u.maxLevel;
-              const locked = Boolean(u.reqLab && !hud.hasLab);
-              const mult = Math.pow(1.45, lvl);
+              const state = getUpgradeState(u.id, hud.upgrades, hud.resources, hud.hasLab);
+              const maxed = state === 'maxed';
+              const locked = state === 'locked';
+              const cost = getUpgradeCost(u, lvl);
+              const costParts = [
+                { key: 'silicate', label: 'Sil', value: cost.silicate },
+                { key: 'iron', label: 'Sắt', value: cost.iron },
+                { key: 'aether', label: 'Aeth', value: cost.aether },
+              ].filter((p) => p.value > 0);
               return (
                 <div key={u.id} className="rounded-xl border border-slate-800 bg-slate-900/80 p-3">
                   <div className="flex items-center justify-between">
@@ -427,22 +434,37 @@ export default function AetherGame() {
                   <p className="mt-1 text-[11px] text-slate-400">{u.desc}</p>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="font-mono text-[11px] text-slate-300">
-                      {maxed
-                        ? 'ĐÃ TỐI ĐA'
-                        : [
-                            u.cost.silicate ? `${Math.round(u.cost.silicate * mult)} Sil` : '',
-                            u.cost.iron ? `${Math.round(u.cost.iron * mult)} Sắt` : '',
-                            u.cost.aether ? `${Math.round(u.cost.aether * mult)} Aeth` : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
+                      {maxed ? (
+                        'ĐÃ TỐI ĐA'
+                      ) : (
+                        costParts.map((p, i) => (
+                          <span key={p.key}>
+                            {i > 0 && <span className="text-slate-500"> · </span>}
+                            <span
+                              className={
+                                hud.resources[p.key as keyof typeof hud.resources] < p.value
+                                  ? 'text-rose-400'
+                                  : 'text-slate-300'
+                              }
+                            >
+                              {p.value} {p.label}
+                            </span>
+                          </span>
+                        ))
+                      )}
                     </span>
                     <button
-                      disabled={maxed || locked}
+                      disabled={state !== 'affordable'}
                       onClick={() => engineRef.current?.buyUpgrade(u.id)}
                       className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
                     >
-                      {locked ? 'Cần Phòng NC [7]' : maxed ? 'Max' : 'Nâng cấp'}
+                      {locked
+                        ? 'Cần Phòng NC [7]'
+                        : maxed
+                        ? 'Max'
+                        : state === 'unaffordable'
+                        ? 'Thiếu tài nguyên'
+                        : 'Nâng cấp'}
                     </button>
                   </div>
                 </div>

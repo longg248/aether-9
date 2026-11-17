@@ -48,7 +48,8 @@ export function updateWarpProgress(engine: AetherGameEngine, dt: number): void {
   // above the configurable reserve, keeping Aether available for upgrades.
   const available = engine.resources.aether - engine.aetherReserve;
   if (available > 0 && engine.warpProgress < TARGET_WARP_AETHER) {
-    const rate = (12 + engine.upgrades.aether_capacitor * 6) * dt;
+    // +45% charge rate per capacitor level, matching the tech tree description.
+    const rate = 12 * (1 + engine.upgrades.aether_capacitor * 0.45) * dt;
     const transfer = Math.min(available, rate, TARGET_WARP_AETHER - engine.warpProgress);
     engine.resources.aether -= transfer;
     engine.warpProgress += transfer;

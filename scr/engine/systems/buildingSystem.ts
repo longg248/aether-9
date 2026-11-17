@@ -1,8 +1,43 @@
 import { BUILDINGS, GRID_SIZE, HUB_GX, HUB_GY, HUB_X, HUB_Y, TILE_SIZE, UPGRADES } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
-import { BuildingEntity, BuildingType } from '@/types/game';
+import { BuildingEntity, BuildingType, Resources, UpgradeConfig } from '@/types/game';
 import { isTileRevealed } from '@/utils/proceduralTerrain';
 import { soundEngine } from '@/utils/soundEngine';
+
+/** Level-scaled upgrade cost — single source of truth for engine and UI. */
+export function getUpgradeCost(upg: UpgradeConfig, level: number): Resources {
+  const mult = Math.pow(1.45, level);
+  return {
+    silicate: Math.round((upg.cost.silicate || 0) * mult),
+    iron: Math.round((upg.cost.iron || 0) * mult),
+    aether: Math.round((upg.cost.aether || 0) * mult),
+  };
+}
+
+export type UpgradeState = 'maxed' | 'locked' | 'affordable' | 'unaffordable';
+
+/** Purchase availability shared by buyUpgrade and the tech panel UI. */
+export function getUpgradeState(
+  id: string,
+  upgrades: Record<string, number>,
+  resources: Resources,
+  hasLab: boolean
+): UpgradeState | null {
+  const upg = UPGRADES.find((u) => u.id === id);
+  if (!upg) return null;
+  const lvl = upgrades[id] || 0;
+  if (lvl >= upg.maxLevel) return 'maxed';
+  if (upg.reqLab && !hasLab) return 'locked';
+  const cost = getUpgradeCost(upg, lvl);
+  if (
+    resources.silicate < cost.silicate ||
+    resources.iron < cost.iron ||
+    resources.aether < cost.aether
+  ) {
+    return 'unaffordable';
+  }
+  return 'affordable';
+}
 
 export function getEnergyStats(engine: AetherGameEngine): { prod: number; use: number; efficiency: number } {
   const isNight = engine.dayTime > 0.72 || engine.dayTime < 0.14;
@@ -116,25 +151,23 @@ export function buyUpgrade(engine: AetherGameEngine, id: string): void {
   const upg = UPGRADES.find((u) => u.id === id);
   if (!upg) return;
   const lvl = engine.upgrades[id] || 0;
-  if (lvl >= upg.maxLevel) return;
-  if (upg.reqLab && !engine.buildings.some((b) => b.type === 'lab')) {
+  const hasLab = engine.buildings.some((b) => b.type === 'lab');
+  const state = getUpgradeState(id, engine.upgrades, engine.resources, hasLab);
+
+  if (state === 'locked') {
     engine.pushLog('Cần xây Phòng Nghiên Cứu Aether [7] trước!', 'warn');
     return;
   }
-
-  const mult = Math.pow(1.45, lvl);
-  const costSil = Math.round((upg.cost.silicate || 0) * mult);
-  const costIron = Math.round((upg.cost.iron || 0) * mult);
-  const costAeth = Math.round((upg.cost.aether || 0) * mult);
-
-  if (engine.resources.silicate < costSil || engine.resources.iron < costIron || engine.resources.aether < costAeth) {
+  if (state === 'unaffordable') {
     engine.pushLog('Không đủ tài nguyên nâng cấp!', 'warn');
     return;
   }
+  if (state !== 'affordable') return; // maxed (or unknown id): no repeat purchase
 
-  engine.resources.silicate -= costSil;
-  engine.resources.iron -= costIron;
-  engine.resources.aether -= costAeth;
+  const cost = getUpgradeCost(upg, lvl);
+  engine.resources.silicate -= cost.silicate;
+  engine.resources.iron -= cost.iron;
+  engine.resources.aether -= cost.aether;
   engine.upgrades[id] = lvl + 1;
 
   if (id === 'shield_matrix') {
