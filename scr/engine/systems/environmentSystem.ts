@@ -108,6 +108,8 @@ export function updateStorms(engine: AetherGameEngine, dt: number): void {
     }
     if (engine.stormDuration <= 0) {
       engine.stormActive = false;
+      // Surviving a full storm is an objective milestone (Hub still alive).
+      if (engine.hubHp > 0) engine.stormsSurvived++;
       engine.pushLog('Bão Từ đã tan. Hệ thống ổn định trở lại.', 'good');
     }
   }

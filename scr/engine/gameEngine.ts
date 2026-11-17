@@ -21,6 +21,8 @@ import { updateDrones } from '@/engine/systems/droneSystem';
 import { addFloatingText, pushLog, spawnParticles, updateEffects } from '@/engine/systems/effectsSystem';
 import { updateEnemies, updateProjectiles } from '@/engine/systems/enemySystem';
 import { checkGameEnd, updateCrashPods, updateStorms, updateWarpProgress } from '@/engine/systems/environmentSystem';
+import { createDepositNodes, generatePOIs, updatePOIs } from '@/engine/systems/poiSystem';
+import { updateObjectives } from '@/engine/systems/objectiveSystem';
 import {
   handleWorldClick,
   triggerDash,
@@ -43,6 +45,7 @@ import {
   LaserBeam,
   LightningBolt,
   Particle,
+  PoiEntity,
   Projectile,
   ResourceNode,
   Resources,
@@ -69,6 +72,7 @@ export class AetherGameEngine {
 
   public buildings: BuildingEntity[] = [];
   public nodes: ResourceNode[] = [];
+  public pois: PoiEntity[] = [];
   public drones: DroneEntity[] = [];
   public enemies: EnemyEntity[] = [];
   public crashPods: CrashPod[] = [];
@@ -96,6 +100,11 @@ export class AetherGameEngine {
   public waveCount = 0;
   public podTimer = 55;
   public bossSpawned = false;
+  /** Milestone counters consumed by the objective chain (actual game events). */
+  public stormsSurvived = 0;
+  public behemothKilled = 0;
+  /** Index of the active objective; equals OBJECTIVES.length when all done. */
+  public objectiveIndex = 0;
 
   public logs: { id: string; text: string; type: 'info' | 'warn' | 'ai' | 'good' }[] = [];
 
@@ -118,7 +127,11 @@ export class AetherGameEngine {
     this.phaseIndex = 0;
 
     this.buildings = [];
-    this.nodes = generateResourceNodes();
+    // POIs are seeded/deterministic; nodes avoid POI tiles, deposits join the
+    // node economy as finite aether nodes.
+    this.pois = generatePOIs();
+    this.nodes = generateResourceNodes(this.pois);
+    this.nodes.push(...createDepositNodes(this.pois));
     this.drones = [];
     this.enemies = [];
     this.crashPods = [];
@@ -145,6 +158,9 @@ export class AetherGameEngine {
     this.waveCount = 0;
     this.podTimer = 45;
     this.bossSpawned = false;
+    this.stormsSurvived = 0;
+    this.behemothKilled = 0;
+    this.objectiveIndex = 0;
     this.logs = [];
     this.pushLog(PHASES[0].aiDirective, 'ai');
   }
@@ -217,6 +233,7 @@ export class AetherGameEngine {
 
     updateRoverMovement(this, dt);
     updateCrashPods(this, dt);
+    updatePOIs(this, dt);
     updateRoverCombat(this, dt);
 
     // Energy & Production Buildings
@@ -229,6 +246,7 @@ export class AetherGameEngine {
     updateEnemies(this, dt);
     updateProjectiles(this, dt);
     updateEffects(this, dt);
+    updateObjectives(this);
     checkGameEnd(this);
   }
 

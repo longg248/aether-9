@@ -1,5 +1,5 @@
 import { GRID_SIZE, HUB_GX, HUB_GY, HUB_X, HUB_Y, TILE_SIZE, WORLD_SIZE } from '@/constants/gameConfig';
-import { BuildingEntity, ResourceNode, ResourceType } from '@/types/game';
+import { BuildingEntity, PoiEntity, ResourceNode, ResourceType } from '@/types/game';
 
 export interface CraterDecor {
   x: number;
@@ -123,7 +123,7 @@ export function createProceduralTerrain(): {
   return { canvas, craters, flora };
 }
 
-export function generateResourceNodes(): ResourceNode[] {
+export function generateResourceNodes(pois: PoiEntity[] = []): ResourceNode[] {
   const nodes: ResourceNode[] = [];
   const occupied = new Set<string>();
 
@@ -133,6 +133,8 @@ export function generateResourceNodes(): ResourceNode[] {
       occupied.add(`${HUB_GX + dx},${HUB_GY + dy}`);
     }
   }
+  // POI tiles are reserved world features (deposits carry their own node).
+  for (const p of pois) occupied.add(`${p.gx},${p.gy}`);
 
   const placeCluster = (type: ResourceType, count: number, minDist: number, maxDist: number, amount: number) => {
     let placed = 0;
@@ -169,12 +171,17 @@ export function generateResourceNodes(): ResourceNode[] {
   return nodes;
 }
 
+/** Activated relays reveal the same radius as a Radar building. */
+export const RELAY_REVEAL_RADIUS = 8.5 * TILE_SIZE;
+
 export function isTileRevealed(
   gx: number,
   gy: number,
   roverX: number,
   roverY: number,
-  buildings: BuildingEntity[]
+  buildings: BuildingEntity[],
+  /** Activated signal relays: permanent radar-like reveal sources. */
+  relays?: ReadonlyArray<{ x: number; y: number }>
 ): boolean {
   const tx = (gx + 0.5) * TILE_SIZE;
   const ty = (gy + 0.5) * TILE_SIZE;
@@ -185,6 +192,11 @@ export function isTileRevealed(
   for (const b of buildings) {
     if (b.type === 'radar' && Math.hypot(tx - b.x, ty - b.y) <= 8.5 * TILE_SIZE) {
       return true;
+    }
+  }
+  if (relays) {
+    for (const r of relays) {
+      if (Math.hypot(tx - r.x, ty - r.y) <= RELAY_REVEAL_RADIUS) return true;
     }
   }
   return false;

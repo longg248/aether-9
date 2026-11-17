@@ -9,6 +9,8 @@ import {
   drawFogOfWar,
   drawGroundDecals,
   drawHub,
+  drawPOIMarkers,
+  drawPOIs,
   drawResourceNodes,
   drawTerrain,
 } from '@/engine/rendering/worldRenderer';
@@ -30,6 +32,7 @@ export function renderWorld(engine: AetherGameEngine, ctx: CanvasRenderingContex
   drawFlora(engine, ctx, width, height);
   drawGroundDecals(engine, ctx);
   drawResourceNodes(engine, ctx);
+  drawPOIs(engine, ctx);
   drawCrashPods(engine, ctx);
   drawHub(engine, ctx);
 
@@ -43,6 +46,7 @@ export function renderWorld(engine: AetherGameEngine, ctx: CanvasRenderingContex
   drawCombatEffects(engine, ctx);
   drawBuildGhost(engine, ctx);
   drawFogOfWar(engine, ctx, camX, camY, width, height);
+  drawPOIMarkers(engine, ctx);
   drawFloatingTexts(engine, ctx);
   ctx.restore();
 

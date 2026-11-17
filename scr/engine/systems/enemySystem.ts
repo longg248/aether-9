@@ -101,7 +101,17 @@ export function spawnEnemyWave(engine: AetherGameEngine): void {
   }
 }
 
-function createEnemy(engine: AetherGameEngine, type: EnemyType, x: number, y: number, scale: number): void {
+/** Monotonic suffix: ids stay unique even when Date.now/Math.random collide. */
+let enemySeq = 0;
+
+/** Shared spawner: waves and crystal-nest ambushes use the same stat table. */
+export function createEnemy(
+  engine: AetherGameEngine,
+  type: EnemyType,
+  x: number,
+  y: number,
+  scale: number
+): EnemyEntity {
   const stats: Record<EnemyType, { hp: number; speed: number; radius: number }> = {
     swarmer: { hp: 55 * scale, speed: 68, radius: 12 },
     goliath: { hp: 220 * scale, speed: 42, radius: 19 },
@@ -109,8 +119,8 @@ function createEnemy(engine: AetherGameEngine, type: EnemyType, x: number, y: nu
     behemoth: { hp: 2600, speed: 32, radius: 34 },
   };
   const s = stats[type];
-  engine.enemies.push({
-    id: `enm_${Date.now()}_${Math.random()}`,
+  const enemy: EnemyEntity = {
+    id: `enm_${Date.now()}_${Math.random()}_${enemySeq++}`,
     type,
     x,
     y,
@@ -123,7 +133,9 @@ function createEnemy(engine: AetherGameEngine, type: EnemyType, x: number, y: nu
     stunTimer: 0,
     hitFlash: 0,
     angle: 0,
-  });
+  };
+  engine.enemies.push(enemy);
+  return enemy;
 }
 
 export function updateEnemies(engine: AetherGameEngine, dt: number): void {
@@ -140,6 +152,7 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
       engine.spawnParticles(e.x, e.y, '#c084fc', e.type === 'behemoth' ? 40 : 12, 130, true);
       if (e.type === 'behemoth') {
         engine.resources.aether += 150;
+        engine.behemothKilled++;
         engine.pushLog('ĐÃ TIÊU DIỆT AETHER BEHEMOTH! Thu được +150 Aether!', 'good');
       } else if (Math.random() < 0.35) {
         engine.resources.aether += 3;

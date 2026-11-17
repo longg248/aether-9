@@ -1,10 +1,12 @@
 import type { AetherGameEngine } from '@/engine/gameEngine';
 import { hasLivingLab } from '@/engine/systems/buildingSystem';
+import { OBJECTIVES, getActiveObjective } from '@/engine/systems/objectiveSystem';
 import { HudSnapshot } from '@/types/game';
 
 export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
   const energy = engine.getEnergyStats();
   const boss = engine.enemies.find((e) => e.type === 'behemoth');
+  const objective = getActiveObjective(engine);
   return {
     elapsed: engine.elapsed,
     resources: { ...engine.resources },
@@ -30,6 +32,21 @@ export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
     bossActive: Boolean(boss),
     bossHp: boss ? Math.max(0, Math.round(boss.hp)) : 0,
     bossMaxHp: boss ? boss.maxHp : 1,
+    objective: objective
+      ? {
+          id: objective.id,
+          title: objective.title,
+          desc: objective.desc,
+          progress: Math.min(objective.target, objective.progress(engine)),
+          target: objective.target,
+        }
+      : null,
+    objectivesDone: engine.objectiveIndex,
+    objectivesTotal: OBJECTIVES.length,
+    poi: {
+      discovered: engine.pois.filter((p) => p.discovered).length,
+      total: engine.pois.length,
+    },
     dayTime: engine.dayTime,
     upgrades: { ...engine.upgrades },
     hasLab: hasLivingLab(engine.buildings),

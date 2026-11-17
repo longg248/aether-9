@@ -1,5 +1,6 @@
 import { GRID_SIZE, HUB_X, HUB_Y, TILE_SIZE } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
+import { POI_CONFIG, getActivatedRelays } from '@/engine/systems/poiSystem';
 import { isTileRevealed } from '@/utils/proceduralTerrain';
 
 export function drawTerrain(engine: AetherGameEngine, ctx: CanvasRenderingContext2D): void {
@@ -97,6 +98,125 @@ export function drawCrashPods(engine: AetherGameEngine, ctx: CanvasRenderingCont
   }
 }
 
+export function drawPOIs(engine: AetherGameEngine, ctx: CanvasRenderingContext2D): void {
+  // Points of interest: distinct silhouette per type, pulse while actionable.
+  for (const poi of engine.pois) {
+    const cfg = POI_CONFIG[poi.type];
+    ctx.save();
+    ctx.translate(poi.x, poi.y);
+
+    // Shadow pad
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(4, 6, 20, 13, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const actionable = !poi.completed && poi.type !== 'aether_deposit';
+    if (actionable) {
+      const pulse = 22 + Math.sin(poi.beaconPhase) * 4;
+      ctx.strokeStyle = `${cfg.accent}88`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, pulse, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = poi.completed ? '#334155' : cfg.color;
+    ctx.strokeStyle = poi.completed ? '#64748b' : cfg.accent;
+    ctx.lineWidth = 2;
+
+    if (poi.type === 'research_station') {
+      // Dome + antenna mast
+      ctx.beginPath();
+      ctx.arc(0, 4, 14, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -10);
+      ctx.lineTo(0, -22);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -24, 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (poi.type === 'signal_relay') {
+      // Lattice tower with dish
+      ctx.beginPath();
+      ctx.moveTo(-10, 14);
+      ctx.lineTo(0, -18);
+      ctx.lineTo(10, 14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -18, 6, Math.PI * 0.9, Math.PI * 2.1);
+      ctx.stroke();
+      if (poi.completed) {
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.5)';
+        ctx.beginPath();
+        ctx.arc(0, -18, 10 + Math.sin(poi.beaconPhase) * 2, -0.9, 0.9);
+        ctx.stroke();
+      }
+    } else if (poi.type === 'crystal_nest') {
+      // Jagged crystal cluster
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * Math.PI * 2 + 0.4;
+        const ox = Math.cos(a) * 9;
+        const oy = Math.sin(a) * 7;
+        ctx.beginPath();
+        ctx.moveTo(ox, oy - 14);
+        ctx.lineTo(ox + 6, oy + 6);
+        ctx.lineTo(ox - 6, oy + 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (poi.type === 'supply_cache') {
+      // Crate with cross strap
+      ctx.beginPath();
+      ctx.roundRect(-13, -11, 26, 24, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-13, 1);
+      ctx.lineTo(13, 1);
+      ctx.moveTo(0, -11);
+      ctx.lineTo(0, 13);
+      ctx.stroke();
+    }
+    // aether_deposit: the crystal node itself is drawn by drawResourceNodes.
+
+    // Channeling progress bar
+    if (poi.progress > 0 && !poi.completed) {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(-16, -32, 32, 4);
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(-16, -32, 32 * Math.min(1, poi.progress), 4);
+    }
+    ctx.restore();
+  }
+}
+
+export function drawPOIMarkers(engine: AetherGameEngine, ctx: CanvasRenderingContext2D): void {
+  // Discovered POIs keep a small map pin above the fog so the player can
+  // navigate back after the rover/radar reveal moves on.
+  for (const poi of engine.pois) {
+    if (!poi.discovered) continue;
+    const cfg = POI_CONFIG[poi.type];
+    ctx.save();
+    ctx.translate(poi.x, poi.y - 34);
+    ctx.fillStyle = poi.completed ? 'rgba(100,116,139,0.8)' : cfg.accent;
+    ctx.beginPath();
+    ctx.moveTo(0, 6);
+    ctx.lineTo(-5, -2);
+    ctx.lineTo(0, -6);
+    ctx.lineTo(5, -2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 export function drawHub(engine: AetherGameEngine, ctx: CanvasRenderingContext2D): void {
   // Central Command Hub (Octagonal Multi-Tier Reactor)
   ctx.save();
@@ -166,7 +286,8 @@ export function drawFogOfWar(
   width: number,
   height: number
 ): void {
-  // Soft Fog of War
+  // Soft Fog of War (activated relays are permanent reveal sources)
+  const relays = getActivatedRelays(engine.pois);
   const startGx = Math.max(0, Math.floor(camX / TILE_SIZE) - 1);
   const endGx = Math.min(GRID_SIZE - 1, Math.ceil((camX + width) / TILE_SIZE) + 1);
   const startGy = Math.max(0, Math.floor(camY / TILE_SIZE) - 1);
@@ -174,7 +295,7 @@ export function drawFogOfWar(
 
   for (let gy = startGy; gy <= endGy; gy++) {
     for (let gx = startGx; gx <= endGx; gx++) {
-      if (!isTileRevealed(gx, gy, engine.rover.x, engine.rover.y, engine.buildings)) {
+      if (!isTileRevealed(gx, gy, engine.rover.x, engine.rover.y, engine.buildings, relays)) {
         ctx.fillStyle = 'rgba(7, 5, 12, 0.84)';
         ctx.fillRect(gx * TILE_SIZE, gy * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
       }

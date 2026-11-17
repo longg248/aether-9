@@ -1,5 +1,6 @@
 import { BUILDINGS, GRID_SIZE, HUB_GX, HUB_GY, HUB_X, HUB_Y, TILE_SIZE, UPGRADES } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
+import { getActivatedRelays } from '@/engine/systems/poiSystem';
 import { BuildingEntity, BuildingType, Resources, UpgradeConfig } from '@/types/game';
 import { isTileRevealed } from '@/utils/proceduralTerrain';
 import { soundEngine } from '@/utils/soundEngine';
@@ -70,11 +71,17 @@ export function canBuildAt(
   if (Math.abs(gx - HUB_GX) <= 1 && Math.abs(gy - HUB_GY) <= 1) {
     return { ok: false, reason: 'Khu vực Trung tâm Chỉ huy' };
   }
-  if (!isTileRevealed(gx, gy, engine.rover.x, engine.rover.y, engine.buildings)) {
+  if (!isTileRevealed(gx, gy, engine.rover.x, engine.rover.y, engine.buildings, getActivatedRelays(engine.pois))) {
     return { ok: false, reason: 'Chưa thăm dò khu vực này' };
   }
   if (engine.buildings.some((b) => b.gx === gx && b.gy === gy)) {
     return { ok: false, reason: 'Ô đã có công trình' };
+  }
+  // POI tiles are reserved world features; deposit tiles follow node rules
+  // below (drill allowed, everything else blocked by the ore check).
+  const poi = engine.pois.find((p) => p.gx === gx && p.gy === gy);
+  if (poi && poi.type !== 'aether_deposit') {
+    return { ok: false, reason: 'Khu vực điểm đặc biệt — không thể xây dựng' };
   }
 
   const node = engine.nodes.find((n) => n.gx === gx && n.gy === gy && n.amount > 0);
