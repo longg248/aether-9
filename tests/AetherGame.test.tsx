@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AetherGame from '@/components/game/AetherGame';
+import { DEFAULT_AETHER_RESERVE } from '@/constants/gameConfig';
 import { AetherGameEngine } from '@/engine/gameEngine';
 
 let resetSpy: ReturnType<typeof vi.spyOn>;
@@ -101,6 +102,70 @@ describe('AetherGame: restart resets UI state', () => {
     expect(engine.keys.size).toBe(0);
     expect(engine.selectedBuild).toBeNull();
     expect(screen.queryByText('CÂY CÔNG NGHỆ AETHER')).toBeNull();
+  });
+});
+
+describe('AetherGame: warp reserve control in the tech panel', () => {
+  const openTech = async () => {
+    fireEvent.keyDown(window, { key: 't' });
+    expect(await screen.findByText('CÂY CÔNG NGHỆ AETHER')).toBeTruthy();
+  };
+
+  it('adjusts the reserve by 25 and applies it immediately to the run', async () => {
+    render(<AetherGame />);
+    startGame();
+    const engine = getEngine();
+    await openTech();
+
+    const plus = screen.getByRole('button', { name: 'Tăng dự trữ 25' });
+    const minus = screen.getByRole('button', { name: 'Giảm dự trữ 25' });
+
+    fireEvent.click(plus);
+    expect(engine.aetherReserve).toBe(DEFAULT_AETHER_RESERVE + 25);
+    expect(screen.getByText('175')).toBeTruthy(); // panel value refreshes at once
+
+    fireEvent.click(minus);
+    fireEvent.click(minus);
+    expect(engine.aetherReserve).toBe(DEFAULT_AETHER_RESERVE - 25);
+    expect(screen.getByText('125')).toBeTruthy();
+  });
+
+  it('disables the controls at the 0 and 500 bounds', async () => {
+    render(<AetherGame />);
+    startGame();
+    const engine = getEngine();
+    await openTech();
+
+    const minus = screen.getByRole('button', { name: 'Giảm dự trữ 25' }) as HTMLButtonElement;
+    for (let i = 0; i < 6; i++) fireEvent.click(minus); // 150 → 0
+    expect(engine.aetherReserve).toBe(0);
+    expect(minus.disabled).toBe(true);
+    fireEvent.click(minus); // disabled: must not go negative
+    expect(engine.aetherReserve).toBe(0);
+
+    const plus = screen.getByRole('button', { name: 'Tăng dự trữ 25' }) as HTMLButtonElement;
+    for (let i = 0; i < 20; i++) fireEvent.click(plus); // 0 → 500
+    expect(engine.aetherReserve).toBe(500);
+    expect(plus.disabled).toBe(true);
+    fireEvent.click(plus); // disabled: must not exceed 500
+    expect(engine.aetherReserve).toBe(500);
+  });
+
+  it('restart restores the default reserve', async () => {
+    render(<AetherGame />);
+    startGame();
+    const engine = getEngine();
+    await openTech();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tăng dự trữ 25' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tăng dự trữ 25' }));
+    expect(engine.aetherReserve).toBe(DEFAULT_AETHER_RESERVE + 50);
+
+    engine.status = 'gameover';
+    const restartBtn = await screen.findByText('CHƠI LẠI TỪ ĐẦU', undefined, { timeout: 2000 });
+    fireEvent.click(restartBtn);
+
+    expect(engine.aetherReserve).toBe(DEFAULT_AETHER_RESERVE);
   });
 });
 

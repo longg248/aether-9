@@ -1,4 +1,11 @@
-import { DEFAULT_AETHER_RESERVE, HUB_X, HUB_Y, PHASES } from '@/constants/gameConfig';
+import {
+  AETHER_RESERVE_MAX,
+  AETHER_RESERVE_MIN,
+  DEFAULT_AETHER_RESERVE,
+  HUB_X,
+  HUB_Y,
+  PHASES,
+} from '@/constants/gameConfig';
 import { createInitialResources, createInitialRover, createInitialUpgrades } from '@/engine/gameState';
 import { buildHudSnapshot } from '@/engine/hud';
 import { renderWorld } from '@/engine/rendering/renderer';
@@ -170,9 +177,16 @@ export class AetherGameEngine {
     buyUpgrade(this, id);
   }
 
-  /** Configures how much Aether the Warp Engine must leave untouched. */
+  /** Configures how much Aether the Warp Engine must leave untouched (0..500). */
   public setAetherReserve(value: number): void {
-    this.aetherReserve = Number.isFinite(value) ? Math.max(0, value) : DEFAULT_AETHER_RESERVE;
+    this.aetherReserve = Number.isFinite(value)
+      ? Math.min(AETHER_RESERVE_MAX, Math.max(AETHER_RESERVE_MIN, value))
+      : DEFAULT_AETHER_RESERVE;
+  }
+
+  /** Steps the reserve by delta (UI buttons), clamped to the allowed range. */
+  public adjustAetherReserve(delta: number): void {
+    this.setAetherReserve(this.aetherReserve + delta);
   }
 
   public triggerQuickRepair(): void {

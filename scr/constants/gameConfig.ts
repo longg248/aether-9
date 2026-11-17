@@ -11,6 +11,9 @@ export const TARGET_WARP_AETHER = 1200;
 
 // Aether kept back from the Warp Engine so upgrades/buildings stay affordable.
 export const DEFAULT_AETHER_RESERVE = 150;
+export const AETHER_RESERVE_MIN = 0;
+export const AETHER_RESERVE_MAX = 500;
+export const AETHER_RESERVE_STEP = 25;
 
 // Collision & area-effect tuning
 export const HUB_COLLISION_RADIUS = 56;

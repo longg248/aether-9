@@ -17,7 +17,16 @@ import {
   Wrench,
   Zap,
 } from 'lucide-react';
-import { BUILDING_LIST, PHASES, TARGET_WARP_AETHER, TILE_SIZE, UPGRADES } from '@/constants/gameConfig';
+import {
+  AETHER_RESERVE_MAX,
+  AETHER_RESERVE_MIN,
+  AETHER_RESERVE_STEP,
+  BUILDING_LIST,
+  PHASES,
+  TARGET_WARP_AETHER,
+  TILE_SIZE,
+  UPGRADES,
+} from '@/constants/gameConfig';
 import { AetherGameEngine } from '@/engine/gameEngine';
 import { clearHeldKeys, handleKeyDown, handleKeyUp } from '@/engine/systems/inputSystem';
 import { BuildingType, GameSpeed, GameStatus, HudSnapshot } from '@/types/game';
@@ -147,6 +156,13 @@ export default function AetherGame() {
     const next = selectedBuild === type ? null : type;
     engine.selectedBuild = next;
     setSelectedBuild(next);
+  };
+
+  const handleReserveChange = (delta: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.adjustAetherReserve(delta); // applies immediately to the current run
+    setHud(engine.getHudSnapshot());
   };
 
   const toggleMute = () => {
@@ -401,6 +417,40 @@ export default function AetherGame() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Warp Aether reserve control */}
+          <div className="mt-2.5 rounded-xl border border-purple-500/30 bg-slate-900/80 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-100">Dự trữ Aether chặn Warp</span>
+              <span className="font-mono text-xs text-purple-300">{Math.floor(hud.aetherReserve)}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Warp chỉ tự nạp phần Aether dôi dư trên mức dự trữ. Toàn bộ số dư hiện tại vẫn dùng để nâng cấp.
+            </p>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="font-mono text-[11px] text-slate-300">
+                {AETHER_RESERVE_MIN}–{AETHER_RESERVE_MAX} · bước {AETHER_RESERVE_STEP}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  aria-label={`Giảm dự trữ ${AETHER_RESERVE_STEP}`}
+                  disabled={hud.aetherReserve <= AETHER_RESERVE_MIN}
+                  onClick={() => handleReserveChange(-AETHER_RESERVE_STEP)}
+                  className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                >
+                  −{AETHER_RESERVE_STEP}
+                </button>
+                <button
+                  aria-label={`Tăng dự trữ ${AETHER_RESERVE_STEP}`}
+                  disabled={hud.aetherReserve >= AETHER_RESERVE_MAX}
+                  onClick={() => handleReserveChange(AETHER_RESERVE_STEP)}
+                  className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                >
+                  +{AETHER_RESERVE_STEP}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

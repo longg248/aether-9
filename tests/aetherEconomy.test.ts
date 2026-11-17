@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_AETHER_RESERVE, TARGET_WARP_AETHER } from '@/constants/gameConfig';
+import {
+  AETHER_RESERVE_MAX,
+  AETHER_RESERVE_STEP,
+  DEFAULT_AETHER_RESERVE,
+  TARGET_WARP_AETHER,
+} from '@/constants/gameConfig';
 import { buyUpgrade } from '@/engine/systems/buildingSystem';
 import { updateWarpProgress } from '@/engine/systems/environmentSystem';
 import { makeBuilding, makeEngine, tick } from './helpers';
@@ -56,6 +61,50 @@ describe('aether economy: warp reserve', () => {
     engine.setAetherReserve(999);
     engine.reset();
     expect(engine.aetherReserve).toBe(DEFAULT_AETHER_RESERVE);
+  });
+
+  it('reserve is clamped to the 0..500 player range', () => {
+    const engine = makeEngine();
+    engine.setAetherReserve(600);
+    expect(engine.aetherReserve).toBe(AETHER_RESERVE_MAX);
+    engine.setAetherReserve(-10);
+    expect(engine.aetherReserve).toBe(0);
+  });
+
+  it('adjustAetherReserve steps by 25 and stops at the bounds', () => {
+    const engine = makeEngine();
+    expect(engine.aetherReserve).toBe(DEFAULT_AETHER_RESERVE);
+    engine.adjustAetherReserve(AETHER_RESERVE_STEP);
+    expect(engine.aetherReserve).toBe(175);
+    engine.adjustAetherReserve(-AETHER_RESERVE_STEP);
+    expect(engine.aetherReserve).toBe(150);
+
+    engine.setAetherReserve(AETHER_RESERVE_MAX);
+    engine.adjustAetherReserve(AETHER_RESERVE_STEP);
+    expect(engine.aetherReserve).toBe(AETHER_RESERVE_MAX);
+
+    engine.setAetherReserve(0);
+    engine.adjustAetherReserve(-AETHER_RESERVE_STEP);
+    expect(engine.aetherReserve).toBe(0);
+  });
+
+  it('reserve changes apply immediately to the current run', () => {
+    const engine = makeEngine();
+    engine.resources.aether = 400;
+
+    tick((dt) => updateWarpProgress(engine, dt), 5); // default 150 reserve
+    expect(engine.resources.aether).toBeLessThan(400);
+    expect(engine.resources.aether).toBeGreaterThan(150);
+
+    engine.setAetherReserve(500); // raise above balance mid-run
+    const frozen = engine.resources.aether;
+    tick((dt) => updateWarpProgress(engine, dt), 5);
+    expect(engine.resources.aether).toBe(frozen); // warp stops at once
+
+    engine.setAetherReserve(0); // release everything mid-run
+    tick((dt) => updateWarpProgress(engine, dt), 60);
+    expect(engine.resources.aether).toBeCloseTo(0, 5);
+    expect(engine.warpProgress).toBeCloseTo(400, 5);
   });
 
   it('warp still stops exactly at the 1,200 victory threshold', () => {
