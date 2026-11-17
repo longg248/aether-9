@@ -67,6 +67,15 @@ export function updateWarpProgress(engine: AetherGameEngine, dt: number): void {
   }
 }
 
+/**
+ * Fraction of storm damage that reaches the Hub: 20% reduction per Shield
+ * Matrix level, down to 20% incoming at max level 4 (80% reduction) — exactly
+ * as the upgrade description advertises. No hidden damage floor.
+ */
+export function getStormDamageMultiplier(shieldLevel: number): number {
+  return Math.max(0, 1 - shieldLevel * 0.2);
+}
+
 export function updateStorms(engine: AetherGameEngine, dt: number): void {
   if (!engine.stormActive) {
     engine.stormTimer -= dt;
@@ -94,7 +103,7 @@ export function updateStorms(engine: AetherGameEngine, dt: number): void {
         life: 0.25,
         maxLife: 0.25,
       });
-      const resist = Math.max(0.25, 1 - engine.upgrades.shield_matrix * 0.2);
+      const resist = getStormDamageMultiplier(engine.upgrades.shield_matrix);
       engine.hubHp -= 18 * resist;
     }
     if (engine.stormDuration <= 0) {
