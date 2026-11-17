@@ -95,7 +95,7 @@ export interface DroneEntity {
   drillId: string;
   x: number;
   y: number;
-  state: 'to_node' | 'to_hub';
+  state: 'to_node' | 'to_hub' | 'idle';
   cargoType: ResourceType | null;
   cargoAmount: number;
   propellerAngle: number;
