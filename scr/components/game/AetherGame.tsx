@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { BUILDING_LIST, PHASES, TARGET_WARP_AETHER, TILE_SIZE, UPGRADES } from '@/constants/gameConfig';
 import { AetherGameEngine } from '@/engine/gameEngine';
+import { clearHeldKeys, handleKeyDown, handleKeyUp } from '@/engine/systems/inputSystem';
 import { BuildingType, GameSpeed, GameStatus, HudSnapshot } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
 
@@ -41,9 +42,11 @@ export default function AetherGame() {
     let animId = 0;
     let lastTime = performance.now();
     let hudAccum = 0;
+    let disposed = false;
 
     const loop = (now: number) => {
-      const dt = (now - lastTime) / 1000;
+      if (disposed) return; // guard against duplicate/zombie animation loops
+      const dt = Math.max(0, (now - lastTime) / 1000); // first rAF timestamp can predate lastTime
       lastTime = now;
 
       engine.update(dt);
@@ -78,55 +81,56 @@ export default function AetherGame() {
     animId = requestAnimationFrame(loop);
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      engine.keys.add(k);
-
-      if (k === 'escape') {
-        engine.selectedBuild = null;
-        setSelectedBuild(null);
-        setShowTech(false);
-      } else if (k === ' ') {
-        e.preventDefault();
-        engine.triggerDash();
-      } else if (k === 'q') {
-        engine.triggerEmp();
-      } else if (k === 'e') {
-        engine.triggerOvercharge();
-      } else if (k === 'r') {
-        engine.triggerQuickRepair();
-      } else if (k === 't') {
-        setShowTech((prev) => !prev);
-      } else {
-        const bMatch = BUILDING_LIST.find((b) => b.key === k);
-        if (bMatch) {
-          const next = engine.selectedBuild === bMatch.id ? null : bMatch.id;
-          engine.selectedBuild = next;
-          setSelectedBuild(next);
-        }
-      }
+      const preventDefault = handleKeyDown(engine, e.key, {
+        onSelectBuild: setSelectedBuild,
+        onToggleTech: () => setShowTech((prev) => !prev),
+        onCloseOverlays: () => setShowTech(false),
+      });
+      if (preventDefault) e.preventDefault();
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      engine.keys.delete(e.key.toLowerCase());
+      handleKeyUp(engine, e.key);
+    };
+
+    // Held keys must not survive focus loss (alt-tab, clicking outside, tab hide).
+    const onBlur = () => {
+      clearHeldKeys(engine);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        clearHeldKeys(engine);
+      } else {
+        lastTime = performance.now(); // avoid a giant dt spike on return
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
+      disposed = true;
       cancelAnimationFrame(animId);
+      clearHeldKeys(engine);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, []);
 
   const handleStart = () => {
     const engine = engineRef.current;
     if (!engine) return;
-    engine.reset();
+    engine.reset(); // also clears keys, hoverTile and selectedBuild
     engine.status = 'playing';
     engine.speed = 1;
     setSpeed(1);
     setStatus('playing');
+    setSelectedBuild(null);
+    setShowTech(false);
     setHud(engine.getHudSnapshot());
   };
 

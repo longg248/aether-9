@@ -126,6 +126,10 @@ export class AetherGameEngine {
     this.upgrades = createInitialUpgrades();
     this.rover = createInitialRover();
 
+    this.keys.clear();
+    this.hoverTile = null;
+    this.selectedBuild = null;
+
     this.camera = { x: HUB_X, y: HUB_Y, shake: 0 };
     this.stormTimer = 140;
     this.stormActive = false;
@@ -193,7 +197,7 @@ export class AetherGameEngine {
 
   public update(rawDt: number): void {
     if (this.status !== 'playing' || this.speed === 0) return;
-    const dt = Math.min(0.05, rawDt) * this.speed;
+    const dt = Math.min(0.05, Math.max(0, rawDt)) * this.speed;
     this.elapsed += dt;
     this.dayTime = (this.dayTime + dt / 240) % 1; // 4-minute full day/night cycle
 
