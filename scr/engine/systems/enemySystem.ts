@@ -33,6 +33,23 @@ const TARGET_WEIGHTS: Record<BuildingType, number> = {
 /** Late-wave HP scaling cap: player damage tops out at +140% (turret_optics 5). */
 export const WAVE_HP_SCALE_CAP = 3;
 
+/** Elite variants: late-wave pressure, bounded by the same HP scale cap. */
+export const ELITE_WAVE_START = 5;
+export const ELITE_CHANCE = 0.15;
+export const ELITE_HP_MULT = 1.8;
+export const ELITE_DMG_MULT = 1.5;
+export const ELITE_SPEED_MULT = 1.12;
+export const ELITE_AETHER_DROP = 8;
+
+/**
+ * Heavy telegraph: goliaths/behemoths wind up before striking. The windup
+ * replaces part of the old cooldown so the TOTAL attack cycle (and thus DPS)
+ * is unchanged: goliath 0.6+0.5=1.1s, behemoth 0.9+0.5=1.4s.
+ */
+export const GOLIATH_WINDUP = 0.6;
+export const BEHEMOTH_WINDUP = 0.9;
+export const HEAVY_POST_COOLDOWN = 0.5;
+
 export interface WaveParams {
   /** Number of non-boss enemies in the wave. */
   count: number;
@@ -88,8 +105,12 @@ export function spawnEnemyWave(engine: AetherGameEngine): void {
     let type: EnemyType = 'swarmer';
     if (engine.waveCount >= 3 && i % 5 === 0) type = 'goliath';
     if (engine.waveCount >= 4 && i % 6 === 1) type = 'spitter';
+    // Denser compositions as waves progress (existing early rules preserved).
+    if (engine.waveCount >= 6 && i % 4 === 2) type = 'goliath';
+    if (engine.waveCount >= 7 && i % 5 === 3) type = 'spitter';
 
-    createEnemy(engine, type, sx + (Math.random() - 0.5) * 90, sy + (Math.random() - 0.5) * 90, params.hpScale);
+    const elite = engine.waveCount >= ELITE_WAVE_START && Math.random() < ELITE_CHANCE;
+    createEnemy(engine, type, sx + (Math.random() - 0.5) * 90, sy + (Math.random() - 0.5) * 90, params.hpScale, elite);
   }
 
   // Spawn Behemoth Boss in Phase 4+
@@ -110,7 +131,8 @@ export function createEnemy(
   type: EnemyType,
   x: number,
   y: number,
-  scale: number
+  scale: number,
+  elite = false
 ): EnemyEntity {
   const stats: Record<EnemyType, { hp: number; speed: number; radius: number }> = {
     swarmer: { hp: 55 * scale, speed: 68, radius: 12 },
@@ -119,20 +141,22 @@ export function createEnemy(
     behemoth: { hp: 2600, speed: 32, radius: 34 },
   };
   const s = stats[type];
+  const hp = elite ? s.hp * ELITE_HP_MULT : s.hp;
   const enemy: EnemyEntity = {
     id: `enm_${Date.now()}_${Math.random()}_${enemySeq++}`,
     type,
     x,
     y,
-    hp: s.hp,
-    maxHp: s.hp,
-    speed: s.speed,
-    radius: s.radius,
+    hp,
+    maxHp: hp,
+    speed: elite ? s.speed * ELITE_SPEED_MULT : s.speed,
+    radius: elite ? s.radius + 2 : s.radius,
     legPhase: Math.random() * Math.PI * 2,
     attackCooldown: 0,
     stunTimer: 0,
     hitFlash: 0,
     angle: 0,
+    elite,
   };
   engine.enemies.push(enemy);
   return enemy;
@@ -154,6 +178,10 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
         engine.resources.aether += 150;
         engine.behemothKilled++;
         engine.pushLog('ĐÃ TIÊU DIỆT AETHER BEHEMOTH! Thu được +150 Aether!', 'good');
+      } else if (e.elite) {
+        // Elites always drop Aether — a reliable reward for focused fire.
+        engine.resources.aether += ELITE_AETHER_DROP;
+        engine.addFloatingText(e.x, e.y - 14, `+${ELITE_AETHER_DROP} Aether`, '#facc15', 0.95);
       } else if (Math.random() < 0.35) {
         engine.resources.aether += 3;
       }
@@ -163,11 +191,25 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
 
     if (e.stunTimer > 0) {
       e.stunTimer -= dt;
+      e.windupTimer = 0; // EMP/stun interrupts a telegraphed heavy strike
       continue;
     }
 
     e.legPhase += dt * 14;
     e.attackCooldown = Math.max(0, e.attackCooldown - dt);
+
+    // Heavy telegraph in progress: stand still, then land the strike on a
+    // re-validated target (destroyed buildings are never damaged).
+    const isHeavy = e.type === 'goliath' || e.type === 'behemoth';
+    if (isHeavy && (e.windupTimer ?? 0) > 0) {
+      e.windupTimer = Math.max(0, (e.windupTimer ?? 0) - dt);
+      resolveWallCollision(engine, e);
+      if (e.windupTimer === 0) {
+        executeHeavyAttack(engine, e);
+        e.attackCooldown = HEAVY_POST_COOLDOWN;
+      }
+      continue;
+    }
 
     // Weighted target selection: prefer the Hub and valuable structures over
     // peripheral walls. Re-evaluated every frame, so a destroyed target is
@@ -220,16 +262,20 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
     const blockingWall = findContactWall(engine, e);
 
     if (targetDist <= attackRange && e.attackCooldown <= 0) {
-      e.attackCooldown = e.type === 'behemoth' ? 1.4 : 1.1;
-      if (e.type === 'spitter') {
-        fireAcidProjectile(engine, e);
+      if (isHeavy) {
+        startWindup(e, targetBuilding ? targetBuilding.id : null);
       } else {
-        const baseDmg = e.type === 'behemoth' ? 65 : e.type === 'goliath' ? 28 : 11;
-        if (targetBuilding) {
-          damageBuilding(engine, targetBuilding, baseDmg);
+        e.attackCooldown = 1.1;
+        if (e.type === 'spitter') {
+          fireAcidProjectile(engine, e);
         } else {
-          engine.hubHp -= baseDmg;
-          engine.camera.shake = 5;
+          const baseDmg = 11 * (e.elite ? ELITE_DMG_MULT : 1);
+          if (targetBuilding) {
+            damageBuilding(engine, targetBuilding, baseDmg);
+          } else {
+            engine.hubHp -= baseDmg;
+            engine.camera.shake = 5;
+          }
         }
       }
     } else if (
@@ -239,19 +285,60 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
       targetDist > attackRange &&
       e.attackCooldown <= 0
     ) {
-      e.attackCooldown = e.type === 'behemoth' ? 1.4 : 1.1;
       e.angle = Math.atan2(blockingWall.y - e.y, blockingWall.x - e.x);
-      if (e.type === 'spitter') {
-        fireAcidProjectile(engine, e);
+      if (isHeavy) {
+        startWindup(e, blockingWall.id);
       } else {
-        const baseDmg = e.type === 'behemoth' ? 65 : e.type === 'goliath' ? 28 : 11;
-        damageBuilding(engine, blockingWall, baseDmg);
+        e.attackCooldown = 1.1;
+        if (e.type === 'spitter') {
+          fireAcidProjectile(engine, e);
+        } else {
+          const baseDmg = 11 * (e.elite ? ELITE_DMG_MULT : 1);
+          damageBuilding(engine, blockingWall, baseDmg);
+        }
       }
     }
   }
 
   // Remove destroyed buildings
   engine.buildings = engine.buildings.filter((b) => b.hp > 0);
+}
+
+/** Begins a telegraphed heavy strike aimed at a building (null = the Hub). */
+function startWindup(e: EnemyEntity, targetId: string | null): void {
+  e.windupTotal = e.type === 'behemoth' ? BEHEMOTH_WINDUP : GOLIATH_WINDUP;
+  e.windupTimer = e.windupTotal;
+  e.pendingTargetId = targetId;
+}
+
+/**
+ * Lands a winded-up heavy strike. The target is re-validated at impact: a
+ * building destroyed during the windup is never damaged, and the strike
+ * fizzles (or hits a live blocking wall) instead of phantom damage.
+ */
+function executeHeavyAttack(engine: AetherGameEngine, e: EnemyEntity): void {
+  const dmg = (e.type === 'behemoth' ? 65 : 28) * (e.elite ? ELITE_DMG_MULT : 1);
+  const reach = e.radius + 24 + 6; // windup is stationary; small float tolerance
+  if (e.pendingTargetId) {
+    const target = engine.buildings.find((b) => b.id === e.pendingTargetId && b.hp > 0);
+    if (target && Math.hypot(target.x - e.x, target.y - e.y) <= reach) {
+      damageBuilding(engine, target, dmg);
+      return;
+    }
+  } else if (Math.hypot(HUB_X - e.x, HUB_Y - e.y) <= reach) {
+    engine.hubHp -= dmg;
+    engine.camera.shake = 5;
+    return;
+  }
+  // Original target died mid-windup: only a live, physically blocking wall
+  // may absorb the strike — otherwise it whiffs.
+  const wall = findContactWall(engine, e);
+  if (
+    wall &&
+    Math.hypot(wall.x - e.x, wall.y - e.y) <= e.radius + BUILDING_COLLISION_RADIUS + WALL_ATTACK_REACH
+  ) {
+    damageBuilding(engine, wall, dmg);
+  }
 }
 
 /** Max displacement per collision substep — small vs the wall diameter (48). */
@@ -462,7 +549,7 @@ function fireAcidProjectile(engine: AetherGameEngine, e: EnemyEntity): void {
     y: e.y,
     vx: Math.cos(e.angle) * 210,
     vy: Math.sin(e.angle) * 210,
-    damage: 18,
+    damage: 18 * (e.elite ? ELITE_DMG_MULT : 1),
     life: 1.2,
     color: '#4ade80',
     isAcid: true,

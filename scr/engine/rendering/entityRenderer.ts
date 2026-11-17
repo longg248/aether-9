@@ -140,7 +140,41 @@ export function drawEnemies(engine: AetherGameEngine, ctx: CanvasRenderingContex
     ctx.arc(e.radius * 0.65, -e.radius * 0.3, 2.5, 0, Math.PI * 2);
     ctx.arc(e.radius * 0.65, e.radius * 0.3, 2.5, 0, Math.PI * 2);
     ctx.fill();
+
+    // Elite marker: gold ring so priority targets read at a glance.
+    if (e.elite) {
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, e.radius * 1.32, e.radius * 1.02, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Heavy strike telegraph: expanding ring + aim wedge while winding up.
+    if ((e.windupTimer ?? 0) > 0 && e.windupTotal) {
+      const t = 1 - (e.windupTimer ?? 0) / e.windupTotal;
+      const telegraphColor = e.type === 'behemoth' ? '192, 132, 252' : '251, 146, 60';
+      ctx.strokeStyle = `rgba(${telegraphColor}, ${0.35 + 0.5 * t})`;
+      ctx.lineWidth = 2 + 2 * t;
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius * (1.5 + 0.6 * t), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(248, 113, 113, ${0.2 + 0.35 * t})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, e.radius + 26, -0.5, 0.5);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.restore();
+
+    // Elite health bar (world-space, above the body).
+    if (e.elite && e.hp < e.maxHp) {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(e.x - 16, e.y - e.radius - 14, 32, 4);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(e.x - 16, e.y - e.radius - 14, 32 * Math.max(0, e.hp / e.maxHp), 4);
+    }
   }
 }
 
