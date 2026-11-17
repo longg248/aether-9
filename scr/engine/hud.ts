@@ -8,7 +8,7 @@ export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
     elapsed: engine.elapsed,
     resources: { ...engine.resources },
     aetherReserve: engine.aetherReserve,
-    aetherAvailable: Math.max(0, engine.resources.aether - engine.aetherReserve),
+    warpSurplus: Math.max(0, engine.resources.aether - engine.aetherReserve),
     energyProd: energy.prod,
     energyUse: energy.use,
     hubHp: Math.round(engine.hubHp),

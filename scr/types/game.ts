@@ -201,9 +201,12 @@ export interface RoverState {
 
 export interface HudSnapshot {
   elapsed: number;
+  /** Spendable balance: resources.aether is what upgrades/buildings consume. */
   resources: Resources;
+  /** Aether protected from automatic Warp transfer. */
   aetherReserve: number;
-  aetherAvailable: number;
+  /** Surplus above the reserve that the Warp Engine may auto-consume. */
+  warpSurplus: number;
   energyProd: number;
   energyUse: number;
   hubHp: number;

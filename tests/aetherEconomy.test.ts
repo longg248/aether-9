@@ -127,23 +127,82 @@ describe('aether economy: upgrades alongside warp consumption', () => {
   });
 });
 
-describe('aether economy: HUD consistency', () => {
-  it('HUD reports total, reserved and available Aether consistently', () => {
+describe('aether economy: HUD semantics (spendable / surplus / reserve)', () => {
+  it('HUD reports spendable balance, warp surplus and reserve consistently', () => {
     const engine = makeEngine();
     engine.resources.aether = 200;
     engine.setAetherReserve(150);
 
     const hud = engine.getHudSnapshot();
 
-    expect(hud.resources.aether).toBe(200);
-    expect(hud.aetherReserve).toBe(150);
-    expect(hud.aetherAvailable).toBe(50);
+    expect(hud.resources.aether).toBe(200); // spendable: the full balance
+    expect(hud.aetherReserve).toBe(150); // protected from warp
+    expect(hud.warpSurplus).toBe(50); // only this part auto-feeds warp
   });
 
-  it('available Aether never goes negative in the HUD', () => {
+  it('balance BELOW reserve: surplus is 0, spendable stays the full balance', () => {
+    const engine = makeEngine();
+    engine.resources.aether = 80;
+    engine.setAetherReserve(150);
+
+    const hud = engine.getHudSnapshot();
+    expect(hud.resources.aether).toBe(80);
+    expect(hud.warpSurplus).toBe(0);
+    expect(hud.aetherReserve).toBe(150);
+
+    tick((dt) => updateWarpProgress(engine, dt), 10);
+    expect(engine.resources.aether).toBe(80); // warp must not touch it
+    expect(engine.warpProgress).toBe(0);
+  });
+
+  it('balance EQUAL to reserve: surplus is 0 and warp stays idle', () => {
+    const engine = makeEngine();
+    engine.resources.aether = 150;
+    engine.setAetherReserve(150);
+
+    const hud = engine.getHudSnapshot();
+    expect(hud.resources.aether).toBe(150);
+    expect(hud.warpSurplus).toBe(0);
+
+    tick((dt) => updateWarpProgress(engine, dt), 10);
+    expect(engine.resources.aether).toBe(150);
+    expect(engine.warpProgress).toBe(0);
+  });
+
+  it('balance ABOVE reserve: surplus is the excess and warp drains only it', () => {
+    const engine = makeEngine();
+    engine.resources.aether = 260;
+    engine.setAetherReserve(150);
+
+    const hud = engine.getHudSnapshot();
+    expect(hud.resources.aether).toBe(260);
+    expect(hud.warpSurplus).toBe(110);
+
+    tick((dt) => updateWarpProgress(engine, dt), 30);
+    expect(engine.resources.aether).toBeCloseTo(150, 5);
+    expect(engine.warpProgress).toBeCloseTo(110, 5);
+    expect(engine.getHudSnapshot().warpSurplus).toBeCloseTo(0, 5);
+  });
+
+  it('upgrade purchases use the actual balance, even below the reserve', () => {
+    const engine = makeEngine();
+    engine.buildings.push(makeBuilding('lab', 20, 20));
+    engine.resources.iron = 500;
+    engine.resources.aether = 80; // below the 150 reserve, but affordable
+    engine.setAetherReserve(150);
+
+    buyUpgrade(engine, 'turret_optics'); // Lv.1→2: round(85*1.45)=123 iron + round(35*1.45)=51 aether
+
+    expect(engine.upgrades.turret_optics).toBe(2);
+    expect(engine.resources.aether).toBe(29); // paid from the balance, not the surplus
+    expect(engine.resources.iron).toBe(377);
+    expect(engine.getHudSnapshot().warpSurplus).toBe(0);
+  });
+
+  it('warp surplus never goes negative in the HUD', () => {
     const engine = makeEngine();
     engine.resources.aether = 20;
     const hud = engine.getHudSnapshot();
-    expect(hud.aetherAvailable).toBe(0);
+    expect(hud.warpSurplus).toBe(0);
   });
 });

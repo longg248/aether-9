@@ -211,12 +211,17 @@ export default function AetherGame() {
             <div className="h-4 w-px bg-slate-800" />
             <div
               className="flex items-center gap-1.5"
-              title={`Khả dụng nâng cấp: ${Math.floor(hud.aetherAvailable)} · Dự trữ giữ lại: ${Math.floor(hud.aetherReserve)}`}
+              title={`Chi tiêu được: ${Math.floor(hud.resources.aether)} (nâng cấp & xây dựng) · Dôi dư nạp Warp: ${Math.floor(hud.warpSurplus)} · Dự trữ chặn Warp: ${Math.floor(hud.aetherReserve)}`}
             >
               <Sparkles className="h-3.5 w-3.5 text-purple-400" />
               <span className="text-xs text-slate-400">Aether:</span>
               <span className="font-mono text-sm font-bold text-purple-300">{Math.floor(hud.resources.aether)}</span>
-              <span className="font-mono text-[10px] text-slate-500">(trữ {Math.floor(hud.aetherReserve)})</span>
+              <span
+                className="font-mono text-[10px] text-slate-500"
+                title="Dự trữ chặn chuyển Warp tự động · Dôi dư sẽ được Warp tự nạp"
+              >
+                (trữ {Math.floor(hud.aetherReserve)} · dôi {Math.floor(hud.warpSurplus)})
+              </span>
             </div>
             <div className="h-4 w-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
