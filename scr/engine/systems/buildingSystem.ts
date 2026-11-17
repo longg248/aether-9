@@ -1,4 +1,4 @@
-import { BUILDINGS, GRID_SIZE, HUB_GX, HUB_GY, HUB_X, HUB_Y, TILE_SIZE, UPGRADES } from '@/constants/gameConfig';
+import { BUILDINGS, GRID_SIZE, HUB_GX, HUB_GY, HUB_X, HUB_Y, SMELTER_BATCH_SILICATE, TILE_SIZE, UPGRADES } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
 import { getActivatedRelays } from '@/engine/systems/poiSystem';
 import { BuildingEntity, BuildingType, Resources, UpgradeConfig } from '@/types/game';
@@ -220,8 +220,8 @@ export function updateBuildings(engine: AetherGameEngine, dt: number, efficiency
 
     if (b.type === 'smelter' && b.cooldown <= 0) {
       b.cooldown = 3.2;
-      if (engine.resources.silicate >= 8) {
-        engine.resources.silicate -= 8;
+      if (engine.resources.silicate >= SMELTER_BATCH_SILICATE) {
+        engine.resources.silicate -= SMELTER_BATCH_SILICATE;
         engine.resources.iron += 5;
         engine.resources.aether += 1.5;
         engine.spawnParticles(b.x, b.y - 10, '#f87171', 4, 35, true);

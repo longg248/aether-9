@@ -4,7 +4,7 @@ import { checkGameEnd, updateStorms } from '@/engine/systems/environmentSystem';
 import { updateEnemies } from '@/engine/systems/enemySystem';
 import { OBJECTIVES, getActiveObjective, updateObjectives } from '@/engine/systems/objectiveSystem';
 import { GameStatus } from '@/types/game';
-import { makeBuilding, makeEnemy, makeEngine, tick } from './helpers';
+import { makeBuilding, makeDrillWithDrone, makeEnemy, makeEngine, makeNode, tick } from './helpers';
 
 /** Marks the first N POIs discovered (state-driven progress, not UI). */
 function discoverPois(engine: ReturnType<typeof makeEngine>, count: number): void {
@@ -47,22 +47,27 @@ describe('objective chain: progress from actual game state', () => {
     expect(engine.resources.iron).toBe(before.iron + 35);
   });
 
-  it('production milestone requires living drills and a smelter', () => {
+  it('production milestone requires operating drills and a supplied smelter', () => {
     const engine = makeEngine();
     engine.objectiveIndex = OBJECTIVES.findIndex((o) => o.id === 'production');
-    const drills = [makeBuilding('drill', 20, 20), makeBuilding('drill', 21, 20), makeBuilding('drill', 22, 20)];
+    const rigs = [
+      makeDrillWithDrone(engine, makeNode('silicate', 20, 20, 500)),
+      makeDrillWithDrone(engine, makeNode('silicate', 21, 20, 500)),
+      makeDrillWithDrone(engine, makeNode('iron', 22, 20, 500)),
+    ];
     const smelter = makeBuilding('smelter', 23, 20);
-    engine.buildings.push(...drills, smelter);
+    engine.buildings.push(smelter);
+    engine.resources.silicate = 50; // a full conversion batch is available
 
     const objective = getActiveObjective(engine)!;
     expect(objective.progress(engine)).toBe(4);
 
-    drills[0].hp = 0; // destroyed buildings never count
+    rigs[0].drill.hp = 0; // destroyed buildings never count
     expect(objective.progress(engine)).toBe(3);
     updateObjectives(engine);
     expect(engine.objectiveIndex).toBe(OBJECTIVES.findIndex((o) => o.id === 'production'));
 
-    drills[0].hp = 100;
+    rigs[0].drill.hp = 100;
     const before = { ...engine.resources };
     updateObjectives(engine);
     expect(engine.resources.silicate).toBe(before.silicate + 60);
@@ -120,12 +125,11 @@ describe('objective rewards: exactly once, economy-safe', () => {
       { ...engine.pois[1], id: 'station_done', type: 'research_station', completed: true },
       { ...engine.pois[2], id: 'nest_done', type: 'crystal_nest', completed: true }
     );
-    engine.buildings.push(
-      makeBuilding('drill', 20, 20),
-      makeBuilding('drill', 21, 20),
-      makeBuilding('drill', 22, 20),
-      makeBuilding('smelter', 23, 20)
-    );
+    makeDrillWithDrone(engine, makeNode('silicate', 20, 20, 500));
+    makeDrillWithDrone(engine, makeNode('silicate', 21, 20, 500));
+    makeDrillWithDrone(engine, makeNode('iron', 22, 20, 500));
+    engine.buildings.push(makeBuilding('smelter', 23, 20));
+    engine.resources.silicate = 50; // smelter has a full batch to convert
     engine.stormsSurvived = 1;
     engine.behemothKilled = 1;
 

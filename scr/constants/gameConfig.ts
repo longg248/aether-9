@@ -27,6 +27,9 @@ export const ACID_POOL_LIFE = 5;
 export const ACID_POOL_DPS = 6;
 export const ACID_TICK_INTERVAL = 0.5;
 
+// Smelter input per conversion cycle — shared by production and objectives.
+export const SMELTER_BATCH_SILICATE = 8;
+
 export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   solar: {
     id: 'solar',

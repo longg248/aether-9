@@ -1,5 +1,6 @@
-import { HUB_X, HUB_Y } from '@/constants/gameConfig';
+import { HUB_X, HUB_Y, SMELTER_BATCH_SILICATE } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
+import { getEnergyStats } from '@/engine/systems/buildingSystem';
 import { Resources } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
 
@@ -58,12 +59,28 @@ export const OBJECTIVES: ObjectiveDef[] = [
   {
     id: 'production',
     title: 'Dây chuyền tự động',
-    desc: 'Vận hành đồng thời 3 Máy Khoan và 1 Lò Luyện Kim.',
+    desc: 'Vận hành 3 Máy Khoan có drone đang khai thác và 1 Lò Luyện Kim đủ điện, đủ Silicat cùng lúc.',
     target: 4,
     reward: { silicate: 60, iron: 40 },
+    // Operating ≠ merely existing: a drill counts only while its drone is
+    // actively working (idle = no mineable node left); a smelter counts only
+    // while the grid powers its cycle AND a full Silicate batch is available
+    // to convert — otherwise its 3.2s cycle spins without producing.
     progress: (e) => {
-      const drills = e.buildings.filter((b) => b.type === 'drill' && b.hp > 0).length;
-      const smelters = e.buildings.filter((b) => b.type === 'smelter' && b.hp > 0).length;
+      const { efficiency } = getEnergyStats(e);
+      const drills = e.buildings.filter(
+        (b) =>
+          b.type === 'drill' &&
+          b.hp > 0 &&
+          e.drones.some((d) => d.drillId === b.id && d.state !== 'idle')
+      ).length;
+      const smelters = e.buildings.filter(
+        (b) =>
+          b.type === 'smelter' &&
+          b.hp > 0 &&
+          efficiency > 0 &&
+          e.resources.silicate >= SMELTER_BATCH_SILICATE
+      ).length;
       return Math.min(drills, 3) + Math.min(smelters, 1);
     },
   },
