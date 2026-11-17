@@ -184,21 +184,61 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
  */
 function resolveWallCollision(engine: AetherGameEngine, e: EnemyEntity): BuildingEntity | null {
   let blocker: BuildingEntity | null = null;
-  for (const b of engine.buildings) {
-    if (b.type !== 'wall' || b.hp <= 0) continue;
-    const minDist = e.radius + BUILDING_COLLISION_RADIUS;
-    const dx = e.x - b.x;
-    const dy = e.y - b.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < minDist) {
-      if (dist > 0.001) {
-        e.x = b.x + (dx / dist) * minDist;
-        e.y = b.y + (dy / dist) * minDist;
-      } else {
-        e.x = b.x + minDist; // exactly concentric: pick a deterministic push direction
+  // Multiple passes: pushing out of one wall can shove the enemy into an
+  // adjacent wall (continuous rows, L-corners). Re-resolve until stable.
+  for (let pass = 0; pass < 4; pass++) {
+    let pushed = false;
+    for (const b of engine.buildings) {
+      if (b.type !== 'wall' || b.hp <= 0) continue;
+      const minDist = e.radius + BUILDING_COLLISION_RADIUS;
+      const dx = e.x - b.x;
+      const dy = e.y - b.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < minDist) {
+        if (dist > 0.001) {
+          e.x = b.x + (dx / dist) * minDist;
+          e.y = b.y + (dy / dist) * minDist;
+        } else {
+          e.x = b.x + minDist; // exactly concentric: pick a deterministic push direction
+        }
+        blocker = b;
+        pushed = true;
       }
-      blocker = b;
     }
+    if (!pushed) break;
+  }
+  // Concave corners (L-junctions) can leave a residual overlap: sequential
+  // pushes oscillate between the arms. Nudge along the combined outward
+  // normal of all overlapping walls until the enemy is fully clear.
+  for (let step = 0; step < 24; step++) {
+    let nx = 0;
+    let ny = 0;
+    let overlapping = false;
+    for (const b of engine.buildings) {
+      if (b.type !== 'wall' || b.hp <= 0) continue;
+      const minDist = e.radius + BUILDING_COLLISION_RADIUS;
+      const dx = e.x - b.x;
+      const dy = e.y - b.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < minDist) {
+        overlapping = true;
+        blocker = b;
+        if (dist > 0.001) {
+          nx += dx / dist;
+          ny += dy / dist;
+        } else {
+          nx += 1;
+        }
+      }
+    }
+    if (!overlapping) break;
+    const len = Math.hypot(nx, ny);
+    if (len < 0.001) {
+      e.x += e.radius + BUILDING_COLLISION_RADIUS; // opposing normals: escape along +x
+      break;
+    }
+    e.x += (nx / len) * 4;
+    e.y += (ny / len) * 4;
   }
   return blocker;
 }
