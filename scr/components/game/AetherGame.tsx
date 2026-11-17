@@ -345,9 +345,15 @@ export default function AetherGame() {
                 {hud.stormActive ? 'ĐANG ĐỔ BỘ!' : `${hud.stormTimer}s`}
               </span>
             </div>
-            <div className="flex-1 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-xs backdrop-blur-md">
-              <span className="text-slate-400">Quái vật: </span>
+            <div
+              className="flex-1 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-xs backdrop-blur-md"
+              title={`Đợt tiếp theo sau ${hud.waveTimer}s · Đã qua ${hud.waveCount} đợt · ${hud.enemiesAlive} Bọ Tinh Thể còn sống`}
+            >
+              <span className="text-slate-400">Đợt {hud.waveCount + 1}: </span>
               <span className="font-mono font-bold text-amber-300">{hud.waveTimer}s</span>
+              {hud.enemiesAlive > 0 && (
+                <span className="font-mono font-bold text-rose-400"> · {hud.enemiesAlive} bọ</span>
+              )}
             </div>
           </div>
 

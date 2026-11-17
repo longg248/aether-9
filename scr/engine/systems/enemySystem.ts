@@ -10,8 +10,46 @@ import {
   WORLD_SIZE,
 } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
-import { BuildingEntity, EnemyEntity, EnemyType, Projectile } from '@/types/game';
+import { BuildingEntity, BuildingType, EnemyEntity, EnemyType, Projectile } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
+
+/**
+ * Target attractiveness multipliers (lower = more attractive). The Hub is the
+ * reference at 1.0: turrets and production are priority targets, walls are
+ * deprioritized so enemies path toward valuable structures — but a wall that
+ * physically blocks movement is still attacked (see resolveWallCollision).
+ */
+const TARGET_WEIGHTS: Record<BuildingType, number> = {
+  turret: 0.85,
+  repair_bay: 0.9,
+  drill: 0.95,
+  smelter: 0.95,
+  lab: 0.95,
+  solar: 1.1,
+  radar: 1.1,
+  wall: 1.35,
+};
+
+/** Late-wave HP scaling cap: player damage tops out at +140% (turret_optics 5). */
+export const WAVE_HP_SCALE_CAP = 3;
+
+export interface WaveParams {
+  /** Number of non-boss enemies in the wave. */
+  count: number;
+  /** HP multiplier applied to spawned enemies. */
+  hpScale: number;
+  /** Seconds until the next wave after this one. */
+  nextWaveIn: number;
+}
+
+/** Pure, predictable difficulty curve — shared by the spawner and tests. */
+export function getWaveParams(waveCount: number): WaveParams {
+  return {
+    count: Math.min(22, 4 + Math.floor(waveCount * 1.6)),
+    hpScale: Math.min(WAVE_HP_SCALE_CAP, 1 + waveCount * 0.14),
+    nextWaveIn: Math.max(55, 110 - waveCount * 4),
+  };
+}
 
 /** Applies damage to a building with Repair Bay area protection (shared by melee & projectiles). */
 function damageBuilding(engine: AetherGameEngine, target: BuildingEntity, damage: number): void {
@@ -24,11 +62,12 @@ function damageBuilding(engine: AetherGameEngine, target: BuildingEntity, damage
 
 export function spawnEnemyWave(engine: AetherGameEngine): void {
   engine.waveCount++;
+  const params = getWaveParams(engine.waveCount);
+  engine.waveTimer = params.nextWaveIn;
   const side = Math.floor(Math.random() * 4);
-  const baseCount = Math.min(22, 4 + Math.floor(engine.waveCount * 1.6));
   engine.pushLog(`Cảnh báo: Đợt Bọ Tinh Thể #${engine.waveCount} đang tiến công!`, 'warn');
 
-  for (let i = 0; i < baseCount; i++) {
+  for (let i = 0; i < params.count; i++) {
     let sx = 60;
     let sy = 60;
     const offset = 200 + Math.random() * (WORLD_SIZE - 400);
@@ -50,20 +89,19 @@ export function spawnEnemyWave(engine: AetherGameEngine): void {
     if (engine.waveCount >= 3 && i % 5 === 0) type = 'goliath';
     if (engine.waveCount >= 4 && i % 6 === 1) type = 'spitter';
 
-    createEnemy(engine, type, sx + (Math.random() - 0.5) * 90, sy + (Math.random() - 0.5) * 90);
+    createEnemy(engine, type, sx + (Math.random() - 0.5) * 90, sy + (Math.random() - 0.5) * 90, params.hpScale);
   }
 
   // Spawn Behemoth Boss in Phase 4+
   if (engine.phaseIndex >= 3 && !engine.bossSpawned) {
     engine.bossSpawned = true;
-    createEnemy(engine, 'behemoth', 120, 120);
+    createEnemy(engine, 'behemoth', 120, 120, 1);
     soundEngine.bossAlert();
     engine.pushLog('CẢNH BÁO ĐỎ: CHÚA TỂ TỔ KÉN AETHER BEHEMOTH XUẤT HIỆN!', 'warn');
   }
 }
 
-function createEnemy(engine: AetherGameEngine, type: EnemyType, x: number, y: number): void {
-  const scale = 1 + engine.waveCount * 0.14;
+function createEnemy(engine: AetherGameEngine, type: EnemyType, x: number, y: number, scale: number): void {
   const stats: Record<EnemyType, { hp: number; speed: number; radius: number }> = {
     swarmer: { hp: 55 * scale, speed: 68, radius: 12 },
     goliath: { hp: 220 * scale, speed: 42, radius: 19 },
@@ -92,8 +130,7 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
   // Enemy Waves & AI
   engine.waveTimer -= dt;
   if (engine.waveTimer <= 0) {
-    engine.waveTimer = Math.max(55, 110 - engine.waveCount * 4);
-    spawnEnemyWave(engine);
+    spawnEnemyWave(engine); // also schedules the next wave via getWaveParams
   }
 
   for (let i = engine.enemies.length - 1; i >= 0; i--) {
@@ -119,17 +156,22 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
     e.legPhase += dt * 14;
     e.attackCooldown = Math.max(0, e.attackCooldown - dt);
 
-    // Target nearest building or Hub
+    // Weighted target selection: prefer the Hub and valuable structures over
+    // peripheral walls. Re-evaluated every frame, so a destroyed target is
+    // replaced immediately by the next best valid one.
     let targetX = HUB_X;
     let targetY = HUB_Y;
     let targetBuilding: BuildingEntity | null = null;
-    let bestDist = Math.hypot(HUB_X - e.x, HUB_Y - e.y);
+    let targetDist = Math.hypot(HUB_X - e.x, HUB_Y - e.y);
+    let bestScore = targetDist; // Hub weight is 1.0
 
     for (const b of engine.buildings) {
       if (b.hp <= 0) continue; // destroyed buildings are invalid targets
       const d = Math.hypot(b.x - e.x, b.y - e.y);
-      if (d < bestDist) {
-        bestDist = d;
+      const score = d * TARGET_WEIGHTS[b.type];
+      if (score < bestScore) {
+        bestScore = score;
+        targetDist = d;
         targetX = b.x;
         targetY = b.y;
         targetBuilding = b;
@@ -139,7 +181,7 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
     e.angle = Math.atan2(targetY - e.y, targetX - e.x);
     const attackRange = e.type === 'spitter' ? 165 : e.radius + 24;
 
-    if (bestDist > attackRange) {
+    if (targetDist > attackRange) {
       e.x += Math.cos(e.angle) * e.speed * dt;
       e.y += Math.sin(e.angle) * e.speed * dt;
     }
@@ -148,7 +190,7 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
     // by attacking, instead of walking through or getting stuck forever.
     const blockingWall = resolveWallCollision(engine, e);
 
-    if (bestDist <= attackRange && e.attackCooldown <= 0) {
+    if (targetDist <= attackRange && e.attackCooldown <= 0) {
       e.attackCooldown = e.type === 'behemoth' ? 1.4 : 1.1;
       if (e.type === 'spitter') {
         fireAcidProjectile(engine, e);
@@ -161,7 +203,7 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
           engine.camera.shake = 5;
         }
       }
-    } else if (blockingWall && bestDist > attackRange && e.attackCooldown <= 0) {
+    } else if (blockingWall && targetDist > attackRange && e.attackCooldown <= 0) {
       e.attackCooldown = e.type === 'behemoth' ? 1.4 : 1.1;
       e.angle = Math.atan2(blockingWall.y - e.y, blockingWall.x - e.x);
       if (e.type === 'spitter') {
