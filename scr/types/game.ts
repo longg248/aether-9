@@ -135,6 +135,8 @@ export interface AcidPool {
   radius: number;
   life: number;
   maxLife: number;
+  damagePerSecond: number;
+  tickTimer: number;
 }
 
 export interface LaserBeam {

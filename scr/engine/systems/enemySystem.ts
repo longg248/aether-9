@@ -1,7 +1,26 @@
-import { HUB_X, HUB_Y, WORLD_SIZE } from '@/constants/gameConfig';
+import {
+  ACID_POOL_DPS,
+  ACID_POOL_LIFE,
+  ACID_POOL_RADIUS,
+  ACID_TICK_INTERVAL,
+  BUILDING_COLLISION_RADIUS,
+  HUB_COLLISION_RADIUS,
+  HUB_X,
+  HUB_Y,
+  WORLD_SIZE,
+} from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
-import { BuildingEntity, EnemyType } from '@/types/game';
+import { BuildingEntity, EnemyType, Projectile } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
+
+/** Applies damage to a building with Repair Bay area protection (shared by melee & projectiles). */
+function damageBuilding(engine: AetherGameEngine, target: BuildingEntity, damage: number): void {
+  const protectedByBay = engine.buildings.some(
+    (rb) => rb.type === 'repair_bay' && rb.hp > 0 && Math.hypot(rb.x - target.x, rb.y - target.y) <= 240
+  );
+  target.hp -= damage * (protectedByBay ? 0.75 : 1);
+  target.hitFlash = 0.16;
+}
 
 export function spawnEnemyWave(engine: AetherGameEngine): void {
   engine.waveCount++;
@@ -139,11 +158,7 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
       } else {
         const baseDmg = e.type === 'behemoth' ? 65 : e.type === 'goliath' ? 28 : 11;
         if (targetBuilding) {
-          const protectedByBay = engine.buildings.some(
-            (rb) => rb.type === 'repair_bay' && Math.hypot(rb.x - targetBuilding!.x, rb.y - targetBuilding!.y) <= 240
-          );
-          targetBuilding.hp -= baseDmg * (protectedByBay ? 0.75 : 1);
-          targetBuilding.hitFlash = 0.16;
+          damageBuilding(engine, targetBuilding, baseDmg);
         } else {
           engine.hubHp -= baseDmg;
           engine.camera.shake = 5;
@@ -156,22 +171,86 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
   engine.buildings = engine.buildings.filter((b) => b.hp > 0);
 }
 
+function spawnAcidPool(engine: AetherGameEngine, x: number, y: number): void {
+  engine.acidPools.push({
+    x,
+    y,
+    radius: ACID_POOL_RADIUS,
+    life: ACID_POOL_LIFE,
+    maxLife: ACID_POOL_LIFE,
+    damagePerSecond: ACID_POOL_DPS,
+    tickTimer: ACID_TICK_INTERVAL,
+  });
+}
+
+/** Impact damage happens exactly once, on the actual collision target only. */
+function applyProjectileImpact(
+  engine: AetherGameEngine,
+  p: Projectile,
+  hitBuilding: BuildingEntity | null
+): void {
+  const damage = p.isAcid ? p.damage * 0.5 : p.damage;
+  if (hitBuilding) {
+    damageBuilding(engine, hitBuilding, damage);
+  } else {
+    engine.hubHp -= damage;
+    engine.camera.shake = 3;
+  }
+}
+
 export function updateProjectiles(engine: AetherGameEngine, dt: number): void {
   for (let i = engine.projectiles.length - 1; i >= 0; i--) {
     const p = engine.projectiles[i];
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.life -= dt;
-    if (p.life <= 0) {
-      if (p.isAcid) {
-        engine.acidPools.push({ x: p.x, y: p.y, radius: 26, life: 5, maxLife: 5 });
-        engine.hubHp -= p.damage * 0.5;
+
+    // Collision detection against intact buildings and the Hub.
+    let hitBuilding: BuildingEntity | null = null;
+    for (const b of engine.buildings) {
+      if (b.hp <= 0) continue;
+      if (Math.hypot(b.x - p.x, b.y - p.y) <= BUILDING_COLLISION_RADIUS) {
+        hitBuilding = b;
+        break;
       }
+    }
+    const hitHub =
+      !hitBuilding && Math.hypot(HUB_X - p.x, HUB_Y - p.y) <= HUB_COLLISION_RADIUS;
+
+    if (hitBuilding || hitHub) {
+      if (p.isAcid) spawnAcidPool(engine, p.x, p.y);
+      applyProjectileImpact(engine, p, hitBuilding);
+      engine.projectiles.splice(i, 1);
+      continue;
+    }
+
+    if (p.life <= 0) {
+      // Expired mid-air: acid leaves a pool where it lands, nothing else takes damage.
+      if (p.isAcid) spawnAcidPool(engine, p.x, p.y);
       engine.projectiles.splice(i, 1);
     }
   }
+
+  // Acid pools: fixed-interval damage ticks over a bounded lifetime.
   for (let i = engine.acidPools.length - 1; i >= 0; i--) {
-    engine.acidPools[i].life -= dt;
-    if (engine.acidPools[i].life <= 0) engine.acidPools.splice(i, 1);
+    const ap = engine.acidPools[i];
+    ap.life -= dt;
+    if (ap.life <= 0) {
+      engine.acidPools.splice(i, 1);
+      continue;
+    }
+    ap.tickTimer -= dt;
+    while (ap.tickTimer <= 0) {
+      ap.tickTimer += ACID_TICK_INTERVAL;
+      const tickDamage = ap.damagePerSecond * ACID_TICK_INTERVAL;
+      for (const b of engine.buildings) {
+        if (b.hp > 0 && Math.hypot(b.x - ap.x, b.y - ap.y) <= ap.radius + BUILDING_COLLISION_RADIUS) {
+          damageBuilding(engine, b, tickDamage);
+        }
+      }
+      if (Math.hypot(HUB_X - ap.x, HUB_Y - ap.y) <= ap.radius + HUB_COLLISION_RADIUS) {
+        engine.hubHp -= tickDamage;
+      }
+    }
   }
 }

@@ -9,6 +9,14 @@ export const HUB_X = (HUB_GX + 0.5) * TILE_SIZE;
 export const HUB_Y = (HUB_GY + 0.5) * TILE_SIZE;
 export const TARGET_WARP_AETHER = 1200;
 
+// Collision & area-effect tuning
+export const HUB_COLLISION_RADIUS = 56;
+export const BUILDING_COLLISION_RADIUS = TILE_SIZE * 0.5;
+export const ACID_POOL_RADIUS = 26;
+export const ACID_POOL_LIFE = 5;
+export const ACID_POOL_DPS = 6;
+export const ACID_TICK_INTERVAL = 0.5;
+
 export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   solar: {
     id: 'solar',
