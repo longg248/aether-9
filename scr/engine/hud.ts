@@ -11,6 +11,7 @@ export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
     warpSurplus: Math.max(0, engine.resources.aether - engine.aetherReserve),
     energyProd: energy.prod,
     energyUse: energy.use,
+    energyEfficiency: energy.efficiency,
     hubHp: Math.round(engine.hubHp),
     hubMaxHp: engine.hubMaxHp,
     warpProgress: engine.warpProgress,

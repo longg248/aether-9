@@ -11,6 +11,7 @@ export function getEnergyStats(engine: AetherGameEngine): { prod: number; use: n
   let use = 0;
 
   for (const b of engine.buildings) {
+    if (b.hp <= 0) continue; // destroyed buildings neither produce nor draw power
     const cfg = BUILDINGS[b.type];
     if (cfg.energyDelta > 0) {
       prod += cfg.energyDelta * (b.type === 'solar' ? solarMult : 1);
@@ -163,6 +164,9 @@ export function triggerQuickRepair(engine: AetherGameEngine): void {
 
 export function updateBuildings(engine: AetherGameEngine, dt: number, efficiency: number): void {
   for (const b of engine.buildings) {
+    // A building destroyed after last frame's cleanup (e.g. by acid pools)
+    // must not produce, fire or repair while awaiting removal.
+    if (b.hp <= 0) continue;
     b.animPhase += dt * 3;
     b.recoil = Math.max(0, b.recoil - dt * 18);
     b.hitFlash = Math.max(0, b.hitFlash - dt);
