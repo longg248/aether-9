@@ -59,7 +59,7 @@ export const OBJECTIVES: ObjectiveDef[] = [
   {
     id: 'production',
     title: 'Dây chuyền tự động',
-    desc: 'Vận hành 3 Máy Khoan có drone đang khai thác và 1 Lò Luyện Kim đủ điện, đủ Silicat cùng lúc.',
+    desc: 'Vận hành 3 Máy Khoan có drone đang làm việc và 1 Lò Luyện Kim đủ điện, đủ Silicat cho một mẻ luyện cùng lúc.',
     target: 4,
     reward: { silicate: 60, iron: 40 },
     // Operating ≠ merely existing: a drill counts only while its drone is
