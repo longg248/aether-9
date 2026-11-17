@@ -17,8 +17,18 @@ import {
   Wrench,
   Zap,
 } from 'lucide-react';
-import { BUILDING_LIST, PHASES, TARGET_WARP_AETHER, TILE_SIZE, UPGRADES } from '@/constants/gameConfig';
+import {
+  AETHER_RESERVE_MAX,
+  AETHER_RESERVE_MIN,
+  AETHER_RESERVE_STEP,
+  BUILDING_LIST,
+  PHASES,
+  TARGET_WARP_AETHER,
+  TILE_SIZE,
+  UPGRADES,
+} from '@/constants/gameConfig';
 import { AetherGameEngine } from '@/engine/gameEngine';
+import { clearHeldKeys, handleKeyDown, handleKeyUp } from '@/engine/systems/inputSystem';
 import { BuildingType, GameSpeed, GameStatus, HudSnapshot } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
 
@@ -41,9 +51,11 @@ export default function AetherGame() {
     let animId = 0;
     let lastTime = performance.now();
     let hudAccum = 0;
+    let disposed = false;
 
     const loop = (now: number) => {
-      const dt = (now - lastTime) / 1000;
+      if (disposed) return; // guard against duplicate/zombie animation loops
+      const dt = Math.max(0, (now - lastTime) / 1000); // first rAF timestamp can predate lastTime
       lastTime = now;
 
       engine.update(dt);
@@ -78,55 +90,56 @@ export default function AetherGame() {
     animId = requestAnimationFrame(loop);
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      engine.keys.add(k);
-
-      if (k === 'escape') {
-        engine.selectedBuild = null;
-        setSelectedBuild(null);
-        setShowTech(false);
-      } else if (k === ' ') {
-        e.preventDefault();
-        engine.triggerDash();
-      } else if (k === 'q') {
-        engine.triggerEmp();
-      } else if (k === 'e') {
-        engine.triggerOvercharge();
-      } else if (k === 'r') {
-        engine.triggerQuickRepair();
-      } else if (k === 't') {
-        setShowTech((prev) => !prev);
-      } else {
-        const bMatch = BUILDING_LIST.find((b) => b.key === k);
-        if (bMatch) {
-          const next = engine.selectedBuild === bMatch.id ? null : bMatch.id;
-          engine.selectedBuild = next;
-          setSelectedBuild(next);
-        }
-      }
+      const preventDefault = handleKeyDown(engine, e.key, {
+        onSelectBuild: setSelectedBuild,
+        onToggleTech: () => setShowTech((prev) => !prev),
+        onCloseOverlays: () => setShowTech(false),
+      });
+      if (preventDefault) e.preventDefault();
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      engine.keys.delete(e.key.toLowerCase());
+      handleKeyUp(engine, e.key);
+    };
+
+    // Held keys must not survive focus loss (alt-tab, clicking outside, tab hide).
+    const onBlur = () => {
+      clearHeldKeys(engine);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        clearHeldKeys(engine);
+      } else {
+        lastTime = performance.now(); // avoid a giant dt spike on return
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
+      disposed = true;
       cancelAnimationFrame(animId);
+      clearHeldKeys(engine);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, []);
 
   const handleStart = () => {
     const engine = engineRef.current;
     if (!engine) return;
-    engine.reset();
+    engine.reset(); // also clears keys, hoverTile and selectedBuild
     engine.status = 'playing';
     engine.speed = 1;
     setSpeed(1);
     setStatus('playing');
+    setSelectedBuild(null);
+    setShowTech(false);
     setHud(engine.getHudSnapshot());
   };
 
@@ -143,6 +156,13 @@ export default function AetherGame() {
     const next = selectedBuild === type ? null : type;
     engine.selectedBuild = next;
     setSelectedBuild(next);
+  };
+
+  const handleReserveChange = (delta: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.adjustAetherReserve(delta); // applies immediately to the current run
+    setHud(engine.getHudSnapshot());
   };
 
   const toggleMute = () => {
@@ -205,10 +225,19 @@ export default function AetherGame() {
               <span className="font-mono text-sm font-bold text-sky-300">{Math.floor(hud.resources.iron)}</span>
             </div>
             <div className="h-4 w-px bg-slate-800" />
-            <div className="flex items-center gap-1.5">
+            <div
+              className="flex items-center gap-1.5"
+              title={`Chi tiêu được: ${Math.floor(hud.resources.aether)} (nâng cấp & xây dựng) · Dôi dư nạp Warp: ${Math.floor(hud.warpSurplus)} · Dự trữ chặn Warp: ${Math.floor(hud.aetherReserve)}`}
+            >
               <Sparkles className="h-3.5 w-3.5 text-purple-400" />
               <span className="text-xs text-slate-400">Aether:</span>
               <span className="font-mono text-sm font-bold text-purple-300">{Math.floor(hud.resources.aether)}</span>
+              <span
+                className="font-mono text-[10px] text-slate-500"
+                title="Dự trữ chặn chuyển Warp tự động · Dôi dư sẽ được Warp tự nạp"
+              >
+                (trữ {Math.floor(hud.aetherReserve)} · dôi {Math.floor(hud.warpSurplus)})
+              </span>
             </div>
             <div className="h-4 w-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
@@ -388,6 +417,40 @@ export default function AetherGame() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Warp Aether reserve control */}
+          <div className="mt-2.5 rounded-xl border border-purple-500/30 bg-slate-900/80 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-100">Dự trữ Aether chặn Warp</span>
+              <span className="font-mono text-xs text-purple-300">{Math.floor(hud.aetherReserve)}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Warp chỉ tự nạp phần Aether dôi dư trên mức dự trữ. Toàn bộ số dư hiện tại vẫn dùng để nâng cấp.
+            </p>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="font-mono text-[11px] text-slate-300">
+                {AETHER_RESERVE_MIN}–{AETHER_RESERVE_MAX} · bước {AETHER_RESERVE_STEP}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  aria-label={`Giảm dự trữ ${AETHER_RESERVE_STEP}`}
+                  disabled={hud.aetherReserve <= AETHER_RESERVE_MIN}
+                  onClick={() => handleReserveChange(-AETHER_RESERVE_STEP)}
+                  className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                >
+                  −{AETHER_RESERVE_STEP}
+                </button>
+                <button
+                  aria-label={`Tăng dự trữ ${AETHER_RESERVE_STEP}`}
+                  disabled={hud.aetherReserve >= AETHER_RESERVE_MAX}
+                  onClick={() => handleReserveChange(AETHER_RESERVE_STEP)}
+                  className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                >
+                  +{AETHER_RESERVE_STEP}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

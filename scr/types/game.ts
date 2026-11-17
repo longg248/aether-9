@@ -95,7 +95,7 @@ export interface DroneEntity {
   drillId: string;
   x: number;
   y: number;
-  state: 'to_node' | 'to_hub';
+  state: 'to_node' | 'to_hub' | 'idle';
   cargoType: ResourceType | null;
   cargoAmount: number;
   propellerAngle: number;
@@ -135,6 +135,8 @@ export interface AcidPool {
   radius: number;
   life: number;
   maxLife: number;
+  damagePerSecond: number;
+  tickTimer: number;
 }
 
 export interface LaserBeam {
@@ -199,7 +201,12 @@ export interface RoverState {
 
 export interface HudSnapshot {
   elapsed: number;
+  /** Spendable balance: resources.aether is what upgrades/buildings consume. */
   resources: Resources;
+  /** Aether protected from automatic Warp transfer. */
+  aetherReserve: number;
+  /** Surplus above the reserve that the Warp Engine may auto-consume. */
+  warpSurplus: number;
   energyProd: number;
   energyUse: number;
   hubHp: number;

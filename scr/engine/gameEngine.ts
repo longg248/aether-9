@@ -1,4 +1,11 @@
-import { HUB_X, HUB_Y, PHASES } from '@/constants/gameConfig';
+import {
+  AETHER_RESERVE_MAX,
+  AETHER_RESERVE_MIN,
+  DEFAULT_AETHER_RESERVE,
+  HUB_X,
+  HUB_Y,
+  PHASES,
+} from '@/constants/gameConfig';
 import { createInitialResources, createInitialRover, createInitialUpgrades } from '@/engine/gameState';
 import { buildHudSnapshot } from '@/engine/hud';
 import { renderWorld } from '@/engine/rendering/renderer';
@@ -54,6 +61,7 @@ export class AetherGameEngine {
   public dayTime = 0.22; // 0..1 cycle (0.22 = crisp morning)
 
   public resources: Resources = createInitialResources();
+  public aetherReserve = DEFAULT_AETHER_RESERVE;
   public hubHp = 1200;
   public hubMaxHp = 1200;
   public warpProgress = 0;
@@ -103,6 +111,7 @@ export class AetherGameEngine {
     this.elapsed = 0;
     this.dayTime = 0.22;
     this.resources = createInitialResources();
+    this.aetherReserve = DEFAULT_AETHER_RESERVE;
     this.hubHp = 1200;
     this.hubMaxHp = 1200;
     this.warpProgress = 0;
@@ -123,6 +132,10 @@ export class AetherGameEngine {
 
     this.upgrades = createInitialUpgrades();
     this.rover = createInitialRover();
+
+    this.keys.clear();
+    this.hoverTile = null;
+    this.selectedBuild = null;
 
     this.camera = { x: HUB_X, y: HUB_Y, shake: 0 };
     this.stormTimer = 140;
@@ -164,6 +177,18 @@ export class AetherGameEngine {
     buyUpgrade(this, id);
   }
 
+  /** Configures how much Aether the Warp Engine must leave untouched (0..500). */
+  public setAetherReserve(value: number): void {
+    this.aetherReserve = Number.isFinite(value)
+      ? Math.min(AETHER_RESERVE_MAX, Math.max(AETHER_RESERVE_MIN, value))
+      : DEFAULT_AETHER_RESERVE;
+  }
+
+  /** Steps the reserve by delta (UI buttons), clamped to the allowed range. */
+  public adjustAetherReserve(delta: number): void {
+    this.setAetherReserve(this.aetherReserve + delta);
+  }
+
   public triggerQuickRepair(): void {
     triggerQuickRepair(this);
   }
@@ -186,7 +211,7 @@ export class AetherGameEngine {
 
   public update(rawDt: number): void {
     if (this.status !== 'playing' || this.speed === 0) return;
-    const dt = Math.min(0.05, rawDt) * this.speed;
+    const dt = Math.min(0.05, Math.max(0, rawDt)) * this.speed;
     this.elapsed += dt;
     this.dayTime = (this.dayTime + dt / 240) % 1; // 4-minute full day/night cycle
 
