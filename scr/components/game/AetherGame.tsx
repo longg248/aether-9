@@ -1,0 +1,535 @@
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Activity,
+  Cpu,
+  Flame,
+  Hammer,
+  Pause,
+  Play,
+  Radio,
+  RotateCcw,
+  Shield,
+  Sparkles,
+  Volume2,
+  VolumeX,
+  Wrench,
+  Zap,
+} from 'lucide-react';
+import { BUILDING_LIST, PHASES, TARGET_WARP_AETHER, TILE_SIZE, UPGRADES } from '@/constants/gameConfig';
+import { AetherGameEngine } from '@/engine/gameEngine';
+import { BuildingType, GameSpeed, GameStatus, HudSnapshot } from '@/types/game';
+import { soundEngine } from '@/utils/soundEngine';
+
+export default function AetherGame() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const engineRef = useRef<AetherGameEngine | null>(null);
+
+  const [status, setStatus] = useState<GameStatus>('intro');
+  const [speed, setSpeed] = useState<GameSpeed>(1);
+  const [muted, setMuted] = useState(false);
+  const [selectedBuild, setSelectedBuild] = useState<BuildingType | null>(null);
+  const [showTech, setShowTech] = useState(false);
+  const [hud, setHud] = useState<HudSnapshot | null>(null);
+
+  useEffect(() => {
+    const engine = new AetherGameEngine();
+    engineRef.current = engine;
+    setHud(engine.getHudSnapshot());
+
+    let animId = 0;
+    let lastTime = performance.now();
+    let hudAccum = 0;
+
+    const loop = (now: number) => {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      engine.update(dt);
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        if (canvas.width !== Math.floor(rect.width * dpr) || canvas.height !== Math.floor(rect.height * dpr)) {
+          canvas.width = Math.floor(rect.width * dpr);
+          canvas.height = Math.floor(rect.height * dpr);
+        }
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.save();
+          ctx.scale(dpr, dpr);
+          engine.render(ctx, rect.width, rect.height);
+          ctx.restore();
+        }
+      }
+
+      hudAccum += dt;
+      if (hudAccum >= 0.1) {
+        hudAccum = 0;
+        setHud(engine.getHudSnapshot());
+        setStatus(engine.status);
+      }
+
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      engine.keys.add(k);
+
+      if (k === 'escape') {
+        engine.selectedBuild = null;
+        setSelectedBuild(null);
+        setShowTech(false);
+      } else if (k === ' ') {
+        e.preventDefault();
+        engine.triggerDash();
+      } else if (k === 'q') {
+        engine.triggerEmp();
+      } else if (k === 'e') {
+        engine.triggerOvercharge();
+      } else if (k === 'r') {
+        engine.triggerQuickRepair();
+      } else if (k === 't') {
+        setShowTech((prev) => !prev);
+      } else {
+        const bMatch = BUILDING_LIST.find((b) => b.key === k);
+        if (bMatch) {
+          const next = engine.selectedBuild === bMatch.id ? null : bMatch.id;
+          engine.selectedBuild = next;
+          setSelectedBuild(next);
+        }
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      engine.keys.delete(e.key.toLowerCase());
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
+  const handleStart = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.reset();
+    engine.status = 'playing';
+    engine.speed = 1;
+    setSpeed(1);
+    setStatus('playing');
+    setHud(engine.getHudSnapshot());
+  };
+
+  const handleSpeedChange = (nextSpeed: GameSpeed) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.speed = nextSpeed;
+    setSpeed(nextSpeed);
+  };
+
+  const handleSelectBuild = (type: BuildingType) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const next = selectedBuild === type ? null : type;
+    engine.selectedBuild = next;
+    setSelectedBuild(next);
+  };
+
+  const toggleMute = () => {
+    soundEngine.muted = !muted;
+    setMuted(!muted);
+  };
+
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const currentPhase = PHASES[hud?.phaseIndex ?? 0];
+  const warpPct = Math.min(100, ((hud?.warpProgress ?? 0) / TARGET_WARP_AETHER) * 100);
+
+  return (
+    <div className="relative h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100 select-none">
+      {/* 2D Interactive World Canvas */}
+      <canvas
+        ref={canvasRef}
+        onMouseMove={(e) => {
+          const engine = engineRef.current;
+          const canvas = canvasRef.current;
+          if (!engine || !canvas) return;
+          const rect = canvas.getBoundingClientRect();
+          const worldX = e.clientX - rect.left + (engine.camera.x - rect.width / 2);
+          const worldY = e.clientY - rect.top + (engine.camera.y - rect.height / 2);
+          engine.hoverTile = {
+            gx: Math.floor(worldX / TILE_SIZE),
+            gy: Math.floor(worldY / TILE_SIZE),
+          };
+        }}
+        onClick={(e) => {
+          const engine = engineRef.current;
+          const canvas = canvasRef.current;
+          if (!engine || !canvas) return;
+          const rect = canvas.getBoundingClientRect();
+          const worldX = e.clientX - rect.left + (engine.camera.x - rect.width / 2);
+          const worldY = e.clientY - rect.top + (engine.camera.y - rect.height / 2);
+          engine.handleWorldClick(worldX, worldY);
+        }}
+        className="h-full w-full cursor-crosshair block"
+      />
+
+      {/* TOP HUD BAR */}
+      {hud && status === 'playing' && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-3 p-4">
+          {/* Resources & Energy */}
+          <div className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/90 bg-slate-950/85 px-4 py-2.5 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-orange-400" />
+              <span className="text-xs text-slate-400">Silicat:</span>
+              <span className="font-mono text-sm font-bold text-orange-300">{Math.floor(hud.resources.silicate)}</span>
+            </div>
+            <div className="h-4 w-px bg-slate-800" />
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
+              <span className="text-xs text-slate-400">Sắt:</span>
+              <span className="font-mono text-sm font-bold text-sky-300">{Math.floor(hud.resources.iron)}</span>
+            </div>
+            <div className="h-4 w-px bg-slate-800" />
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+              <span className="text-xs text-slate-400">Aether:</span>
+              <span className="font-mono text-sm font-bold text-purple-300">{Math.floor(hud.resources.aether)}</span>
+            </div>
+            <div className="h-4 w-px bg-slate-800" />
+            <div className="flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-amber-400" />
+              <span
+                className={`font-mono text-xs font-bold ${
+                  hud.energyProd >= hud.energyUse ? 'text-emerald-400' : 'text-rose-400'
+                }`}
+              >
+                {hud.energyProd}/{hud.energyUse} MW
+              </span>
+            </div>
+          </div>
+
+          {/* Warp Drive Progress & Phase */}
+          <div className="pointer-events-auto flex min-w-[300px] flex-col gap-1.5 rounded-xl border border-purple-500/30 bg-slate-950/85 px-4 py-2.5 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold tracking-wider text-purple-300">{currentPhase.title}</span>
+              <span className="font-mono text-slate-400">{formatTime(hud.elapsed)} / ~30:00</span>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-900">
+              <div
+                className="h-full bg-gradient-to-r from-sky-500 via-purple-500 to-fuchsia-400 transition-all duration-300"
+                style={{ width: `${warpPct}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span>Động cơ Bước Nhảy: {warpPct.toFixed(1)}%</span>
+              <span>
+                {Math.floor(hud.warpProgress)} / {TARGET_WARP_AETHER} Aether
+              </span>
+            </div>
+          </div>
+
+          {/* Base Hull, Speed & Audio Controls */}
+          <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-slate-800/90 bg-slate-950/85 px-3 py-2 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center gap-1.5 pr-2">
+              <Shield className="h-4 w-4 text-emerald-400" />
+              <span className="font-mono text-xs font-bold text-emerald-300">
+                {hud.hubHp}/{hud.hubMaxHp}
+              </span>
+            </div>
+
+            <div className="flex items-center rounded-lg bg-slate-900 p-0.5">
+              {([0, 1, 2] as GameSpeed[]).map((sp) => (
+                <button
+                  key={sp}
+                  onClick={() => handleSpeedChange(sp)}
+                  className={`rounded-md px-2 py-1 text-xs font-bold transition ${
+                    speed === sp ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {sp === 0 ? <Pause className="h-3.5 w-3.5" /> : `${sp}x`}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={toggleMute}
+              className="rounded-lg bg-slate-900 p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white"
+              title="Bật/Tắt âm thanh"
+            >
+              {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* BOSS HP BAR */}
+      {hud?.bossActive && status === 'playing' && (
+        <div className="pointer-events-none absolute inset-x-0 top-24 flex justify-center">
+          <div className="w-96 rounded-xl border border-purple-500/60 bg-slate-950/90 px-4 py-2 shadow-2xl">
+            <div className="mb-1 flex justify-between text-xs font-bold text-purple-300">
+              <span>CHÚA TỂ TỔ KÉN: AETHER BEHEMOTH</span>
+              <span>
+                {hud.bossHp} / {hud.bossMaxHp}
+              </span>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-900">
+              <div
+                className="h-full bg-gradient-to-r from-rose-600 to-purple-500"
+                style={{ width: `${(hud.bossHp / hud.bossMaxHp) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LEFT TACTICAL AI LOGS & TIMERS */}
+      {hud && status === 'playing' && (
+        <div className="pointer-events-none absolute left-4 top-24 flex w-80 flex-col gap-2">
+          <div className="flex gap-2">
+            <div className="flex-1 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-xs backdrop-blur-md">
+              <span className="text-slate-400">Bão Từ: </span>
+              <span className={`font-mono font-bold ${hud.stormActive ? 'text-rose-400 animate-pulse' : 'text-sky-300'}`}>
+                {hud.stormActive ? 'ĐANG ĐỔ BỘ!' : `${hud.stormTimer}s`}
+              </span>
+            </div>
+            <div className="flex-1 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-xs backdrop-blur-md">
+              <span className="text-slate-400">Quái vật: </span>
+              <span className="font-mono font-bold text-amber-300">{hud.waveTimer}s</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5 rounded-xl border border-slate-800/80 bg-slate-950/80 p-3 backdrop-blur-md">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider text-sky-400">
+              <Radio className="h-3.5 w-3.5" />
+              <span>AI TÀU MẸ VALKYRIE-7</span>
+            </div>
+            {hud.logs.slice(0, 3).map((log) => (
+              <p
+                key={log.id}
+                className={`text-xs leading-relaxed ${
+                  log.type === 'warn'
+                    ? 'text-rose-300'
+                    : log.type === 'good'
+                    ? 'text-emerald-300'
+                    : log.type === 'ai'
+                    ? 'text-sky-200'
+                    : 'text-slate-300'
+                }`}
+              >
+                {log.text}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TECH TREE MODAL */}
+      {hud && status === 'playing' && showTech && (
+        <div className="absolute right-4 top-24 z-30 w-96 rounded-2xl border border-slate-700 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-xl">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold text-purple-300">
+              <Cpu className="h-4 w-4" />
+              <span>CÂY CÔNG NGHỆ AETHER</span>
+            </div>
+            <button onClick={() => setShowTech(false)} className="text-xs text-slate-400 hover:text-white">
+              Đóng [ESC]
+            </button>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {UPGRADES.map((u) => {
+              const lvl = hud.upgrades[u.id] || 0;
+              const maxed = lvl >= u.maxLevel;
+              const locked = Boolean(u.reqLab && !hud.hasLab);
+              const mult = Math.pow(1.45, lvl);
+              return (
+                <div key={u.id} className="rounded-xl border border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-100">{u.name}</span>
+                    <span className="font-mono text-xs text-purple-300">
+                      Lv.{lvl}/{u.maxLevel}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">{u.desc}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="font-mono text-[11px] text-slate-300">
+                      {maxed
+                        ? 'ĐÃ TỐI ĐA'
+                        : [
+                            u.cost.silicate ? `${Math.round(u.cost.silicate * mult)} Sil` : '',
+                            u.cost.iron ? `${Math.round(u.cost.iron * mult)} Sắt` : '',
+                            u.cost.aether ? `${Math.round(u.cost.aether * mult)} Aeth` : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                    </span>
+                    <button
+                      disabled={maxed || locked}
+                      onClick={() => engineRef.current?.buyUpgrade(u.id)}
+                      className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                    >
+                      {locked ? 'Cần Phòng NC [7]' : maxed ? 'Max' : 'Nâng cấp'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* BOTTOM CONSTRUCTION & ROVER SKILLS BAR */}
+      {hud && status === 'playing' && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-4">
+          {/* Rover Active Skills + Quick Repair + Tech Toggle */}
+          <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/90 px-3 py-2 shadow-xl backdrop-blur-md">
+            <button
+              onClick={() => engineRef.current?.triggerDash()}
+              disabled={hud.skills.dashCd > 0}
+              className="flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-950/60 px-2.5 py-1 text-xs font-semibold text-sky-200 hover:bg-sky-900/70 disabled:opacity-45"
+            >
+              <span>[Space] Lướt Ion</span>
+              {hud.skills.dashCd > 0 && <span className="font-mono text-sky-400">{hud.skills.dashCd}s</span>}
+            </button>
+
+            <button
+              onClick={() => engineRef.current?.triggerEmp()}
+              disabled={hud.skills.empCd > 0}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-950/60 px-2.5 py-1 text-xs font-semibold text-purple-200 hover:bg-purple-900/70 disabled:opacity-45"
+            >
+              <span>[Q] Xung EMP</span>
+              {hud.skills.empCd > 0 && <span className="font-mono text-purple-400">{hud.skills.empCd}s</span>}
+            </button>
+
+            <button
+              onClick={() => engineRef.current?.triggerOvercharge()}
+              disabled={hud.skills.overchargeCd > 0}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-950/60 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-900/70 disabled:opacity-45"
+            >
+              <Flame className="h-3.5 w-3.5 text-amber-400" />
+              <span>[E] Quá Tải</span>
+              {hud.skills.overchargeCd > 0 && (
+                <span className="font-mono text-amber-400">{hud.skills.overchargeCd}s</span>
+              )}
+            </button>
+
+            <div className="h-4 w-px bg-slate-800" />
+
+            <button
+              onClick={() => engineRef.current?.triggerQuickRepair()}
+              className="flex items-center gap-1.5 rounded-lg border border-teal-500/40 bg-teal-950/60 px-2.5 py-1 text-xs font-semibold text-teal-200 hover:bg-teal-900/70"
+            >
+              <Wrench className="h-3.5 w-3.5 text-teal-400" />
+              <span>[R] Sửa Nhanh (20 Sil, 15 Sắt)</span>
+            </button>
+
+            <button
+              onClick={() => setShowTech((prev) => !prev)}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
+                showTech
+                  ? 'border-purple-400 bg-purple-600 text-white'
+                  : 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <Cpu className="h-3.5 w-3.5" />
+              <span>[T] Công Nghệ</span>
+            </button>
+          </div>
+
+          {/* 8 Buildings Dock */}
+          <div className="pointer-events-auto flex flex-wrap justify-center gap-2 rounded-2xl border border-slate-800/90 bg-slate-950/90 p-2.5 shadow-2xl backdrop-blur-md">
+            {BUILDING_LIST.map((b) => {
+              const active = selectedBuild === b.id;
+              return (
+                <button
+                  key={b.id}
+                  onClick={() => handleSelectBuild(b.id)}
+                  title={b.desc}
+                  className={`flex w-36 flex-col items-start rounded-xl border p-2 text-left transition ${
+                    active
+                      ? 'border-sky-400 bg-sky-950/80 ring-2 ring-sky-400/40'
+                      : 'border-slate-800 bg-slate-900/80 hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex w-full items-center justify-between">
+                    <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-300">
+                      [{b.key}]
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400">
+                      {b.energyDelta > 0 ? `+${b.energyDelta}MW` : b.energyDelta < 0 ? `${b.energyDelta}MW` : '0MW'}
+                    </span>
+                  </div>
+                  <span className="mt-1 line-clamp-1 text-xs font-bold text-slate-100">{b.name}</span>
+                  <span className="mt-0.5 font-mono text-[10px] text-slate-400">
+                    {[
+                      b.cost.silicate ? `${b.cost.silicate} Sil` : '',
+                      b.cost.iron ? `${b.cost.iron} Sắt` : '',
+                      b.cost.aether ? `${b.cost.aether} Aeth` : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* INTRO / VICTORY / GAMEOVER OVERLAYS */}
+      {status !== 'playing' && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/85 p-6 backdrop-blur-md">
+          <div className="max-w-lg rounded-3xl border border-slate-800 bg-slate-900/95 p-8 text-center shadow-2xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-400">
+              {status === 'intro' ? (
+                <Hammer className="h-7 w-7" />
+              ) : status === 'victory' ? (
+                <Sparkles className="h-7 w-7" />
+              ) : (
+                <Activity className="h-7 w-7 text-rose-400" />
+              )}
+            </div>
+
+            <h1 className="text-2xl font-black tracking-wide text-white">
+              {status === 'intro'
+                ? 'AETHER-9: HÀNH TINH KHAI KHOÁNG'
+                : status === 'victory'
+                ? 'BƯỚC NHẢY KHÔNG GIAN THÀNH CÔNG!'
+                : 'TRUNG TÂM CHỈ HUY THẤT THỦ'}
+            </h1>
+
+            <p className="mt-3 text-sm leading-relaxed text-slate-300">
+              {status === 'intro'
+                ? 'Điều khiển Rover Kỹ Sư (WASD / Click chuột), xây dựng chuỗi khai khoáng tự động, phòng thủ trước Bọ Tinh Thể và nạp đủ 1.200 Aether để kích hoạt Động cơ Bước Nhảy.'
+                : status === 'victory'
+                ? `Chúc mừng Chỉ huy! Bạn đã hoàn thành chiến dịch sinh tồn trong ${formatTime(hud?.elapsed ?? 0)} và đưa toàn bộ dữ liệu hành tinh Aether-9 trở về quỹ đạo an toàn.`
+                : 'Lõi lò phản ứng đã quá tải trước sức ép của bão từ và sinh vật bản địa. Hãy tái thiết lại hệ thống phòng thủ!'}
+            </p>
+
+            <button
+              onClick={handleStart}
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-purple-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-110"
+            >
+              {status === 'intro' ? <Play className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+              <span>{status === 'intro' ? 'BẮT ĐẦU NHIỆM VỤ' : 'CHƠI LẠI TỪ ĐẦU'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
