@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HUB_X, HUB_Y, TILE_SIZE } from '@/constants/gameConfig';
+import { HUB_X, TILE_SIZE } from '@/constants/gameConfig';
 import {
   WAVE_HP_SCALE_CAP,
   getWaveParams,
