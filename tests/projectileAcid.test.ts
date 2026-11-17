@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACID_POOL_LIFE, HUB_X, HUB_Y } from '@/constants/gameConfig';
+import { ACID_POOL_LIFE, ACID_TICK_INTERVAL, HUB_X, HUB_Y } from '@/constants/gameConfig';
 import { updateEnemies, updateProjectiles } from '@/engine/systems/enemySystem';
 import { Projectile } from '@/types/game';
 import { makeBuilding, makeEnemy, makeEngine, tick } from './helpers';
@@ -142,14 +142,101 @@ describe('acid pools: damage over time and lifetime', () => {
 
     tick((dt) => updateProjectiles(engine, dt), ACID_POOL_LIFE + 1);
 
-    const dotDamage = hpAfterImpact - wall.hp;
-    expect(dotDamage).toBeGreaterThanOrEqual(24); // ~6 dps over ~5s
-    expect(dotDamage).toBeLessThanOrEqual(30);
+    // 5s lifetime / 0.5s interval = exactly 10 ticks × (6 dps × 0.5s) = 30.
+    expect(hpAfterImpact - wall.hp).toBe(30);
     expect(engine.acidPools).toHaveLength(0);
 
     const hpAfterExpiry = wall.hp;
     tick((dt) => updateProjectiles(engine, dt), 3);
     expect(wall.hp).toBe(hpAfterExpiry); // no damage after expiry
+  });
+
+  it('a newly spawned pool keeps its full lifetime on the spawn frame', () => {
+    const engine = makeEngine();
+    const wall = makeBuilding('wall', 10, 10, 480);
+    engine.buildings.push(wall);
+    engine.projectiles.push(makeProjectile(wall.x - 26, wall.y, 210, 0, true));
+
+    updateProjectiles(engine, 0.05); // impact + pool spawn
+
+    expect(engine.acidPools).toHaveLength(1);
+    expect(engine.acidPools[0].life).toBe(ACID_POOL_LIFE);
+    expect(engine.acidPools[0].tickTimer).toBe(ACID_TICK_INTERVAL);
+    expect(wall.hp).toBe(480 - 9); // impact only, no premature tick
+  });
+
+  it('applies exactly 10 ticks of 3 damage when the target stays inside for 5s', () => {
+    const engine = makeEngine();
+    const wall = makeBuilding('wall', 10, 10, 480);
+    engine.buildings.push(wall);
+    engine.projectiles.push(makeProjectile(wall.x - 26, wall.y, 210, 0, true));
+    updateProjectiles(engine, 0.05); // impact -9, pool spawned at full life
+
+    const ticksSeen: number[] = [];
+    let previousHp = wall.hp;
+    for (let frame = 0; frame < 120; frame++) {
+      updateProjectiles(engine, 0.05);
+      if (wall.hp !== previousHp) {
+        ticksSeen.push(previousHp - wall.hp);
+        previousHp = wall.hp;
+      }
+    }
+
+    expect(ticksSeen).toHaveLength(10);
+    expect(ticksSeen.every((d) => d === 3)).toBe(true);
+    expect(wall.hp).toBe(480 - 9 - 30);
+    expect(engine.acidPools).toHaveLength(0);
+  });
+
+  it('a frame spanning several intervals applies each due tick exactly once', () => {
+    const engine = makeEngine();
+    const wall = makeBuilding('wall', 10, 10, 480);
+    engine.buildings.push(wall);
+    engine.projectiles.push(makeProjectile(wall.x - 26, wall.y, 210, 0, true));
+    updateProjectiles(engine, 0.05); // impact -9
+    const hpAfterImpact = wall.hp;
+
+    // 1s frames span two 0.5s tick intervals each.
+    for (let frame = 0; frame < 5; frame++) {
+      updateProjectiles(engine, 1);
+    }
+
+    expect(hpAfterImpact - wall.hp).toBe(30); // still exactly 10 ticks, no duplicates
+    expect(engine.acidPools).toHaveLength(0);
+
+    tick((dt) => updateProjectiles(engine, dt), 3);
+    expect(hpAfterImpact - wall.hp).toBe(30); // nothing after expiry
+  });
+
+  it('total damage is frame-rate independent (0.025s / 0.05s / 0.1s steps)', () => {
+    const totals = [0.025, 0.05, 0.1].map((dt) => {
+      const engine = makeEngine();
+      const wall = makeBuilding('wall', 10, 10, 480);
+      engine.buildings.push(wall);
+      engine.projectiles.push(makeProjectile(wall.x - 26, wall.y, 210, 0, true));
+      updateProjectiles(engine, dt); // impact -9
+      const hpAfterImpact = wall.hp;
+      tick((step) => updateProjectiles(engine, step), ACID_POOL_LIFE + 1, dt);
+      return hpAfterImpact - wall.hp;
+    });
+    expect(totals).toEqual([30, 30, 30]);
+  });
+
+  it('a target leaving the pool only takes ticks while inside', () => {
+    const engine = makeEngine();
+    const wall = makeBuilding('wall', 10, 10, 480);
+    engine.buildings.push(wall);
+    engine.projectiles.push(makeProjectile(wall.x - 26, wall.y, 210, 0, true));
+    updateProjectiles(engine, 0.05); // impact -9
+    const hpAfterImpact = wall.hp;
+
+    tick((dt) => updateProjectiles(engine, dt), 2); // ticks at 0.5/1.0/1.5/2.0
+    expect(hpAfterImpact - wall.hp).toBe(12);
+
+    wall.x += 1000; // leave the pool
+    tick((dt) => updateProjectiles(engine, dt), ACID_POOL_LIFE); // remaining lifetime
+    expect(hpAfterImpact - wall.hp).toBe(12); // no further ticks on the absent target
+    expect(engine.acidPools).toHaveLength(0);
   });
 
   it('pool away from Hub and buildings damages nothing', () => {
@@ -183,8 +270,7 @@ describe('acid pools: damage over time and lifetime', () => {
 
     tick((dt) => updateProjectiles(engine, dt), ACID_POOL_LIFE + 1);
 
-    expect(engine.hubHp).toBeLessThan(hubAfterImpact);
-    expect(hubAfterImpact - engine.hubHp).toBeLessThanOrEqual(30);
+    expect(hubAfterImpact - engine.hubHp).toBe(30); // full 10-tick DoT on the Hub
   });
 });
 

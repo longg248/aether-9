@@ -245,6 +245,35 @@ function applyProjectileImpact(
 }
 
 export function updateProjectiles(engine: AetherGameEngine, dt: number): void {
+  // Acid pools tick BEFORE projectile movement so a pool spawned this frame
+  // starts its lifetime on the next frame (no extra frame lost at spawn).
+  // Tolerance absorbs float drift so boundary ticks/expiry stay deterministic.
+  const EPS = 1e-6;
+  for (let i = engine.acidPools.length - 1; i >= 0; i--) {
+    const ap = engine.acidPools[i];
+    ap.life -= dt;
+    ap.tickTimer -= dt;
+    while (ap.tickTimer <= EPS) {
+      // A tick only damages if its scheduled moment (tickTimer relative to
+      // remaining life) falls within the pool's lifetime — never after expiry.
+      if (ap.tickTimer <= ap.life + EPS) {
+        const tickDamage = ap.damagePerSecond * ACID_TICK_INTERVAL;
+        for (const b of engine.buildings) {
+          if (b.hp > 0 && Math.hypot(b.x - ap.x, b.y - ap.y) <= ap.radius + BUILDING_COLLISION_RADIUS) {
+            damageBuilding(engine, b, tickDamage);
+          }
+        }
+        if (Math.hypot(HUB_X - ap.x, HUB_Y - ap.y) <= ap.radius + HUB_COLLISION_RADIUS) {
+          engine.hubHp -= tickDamage;
+        }
+      }
+      ap.tickTimer += ACID_TICK_INTERVAL;
+    }
+    if (ap.life <= EPS) {
+      engine.acidPools.splice(i, 1);
+    }
+  }
+
   for (let i = engine.projectiles.length - 1; i >= 0; i--) {
     const p = engine.projectiles[i];
     p.x += p.vx * dt;
@@ -274,29 +303,6 @@ export function updateProjectiles(engine: AetherGameEngine, dt: number): void {
       // Expired mid-air: acid leaves a pool where it lands, nothing else takes damage.
       if (p.isAcid) spawnAcidPool(engine, p.x, p.y);
       engine.projectiles.splice(i, 1);
-    }
-  }
-
-  // Acid pools: fixed-interval damage ticks over a bounded lifetime.
-  for (let i = engine.acidPools.length - 1; i >= 0; i--) {
-    const ap = engine.acidPools[i];
-    ap.life -= dt;
-    if (ap.life <= 0) {
-      engine.acidPools.splice(i, 1);
-      continue;
-    }
-    ap.tickTimer -= dt;
-    while (ap.tickTimer <= 0) {
-      ap.tickTimer += ACID_TICK_INTERVAL;
-      const tickDamage = ap.damagePerSecond * ACID_TICK_INTERVAL;
-      for (const b of engine.buildings) {
-        if (b.hp > 0 && Math.hypot(b.x - ap.x, b.y - ap.y) <= ap.radius + BUILDING_COLLISION_RADIUS) {
-          damageBuilding(engine, b, tickDamage);
-        }
-      }
-      if (Math.hypot(HUB_X - ap.x, HUB_Y - ap.y) <= ap.radius + HUB_COLLISION_RADIUS) {
-        engine.hubHp -= tickDamage;
-      }
     }
   }
 }
