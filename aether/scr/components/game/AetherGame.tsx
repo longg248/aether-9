@@ -36,7 +36,6 @@ export default function AetherGame() {
   useEffect(() => {
     const engine = new AetherGameEngine();
     engineRef.current = engine;
-    setHud(engine.getHudSnapshot());
 
     let animId = 0;
     let lastTime = performance.now();
