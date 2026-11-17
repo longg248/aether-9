@@ -10,7 +10,7 @@ import {
   WORLD_SIZE,
 } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
-import { BuildingEntity, EnemyType, Projectile } from '@/types/game';
+import { BuildingEntity, EnemyEntity, EnemyType, Projectile } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
 
 /** Applies damage to a building with Repair Bay area protection (shared by melee & projectiles). */
@@ -126,6 +126,7 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
     let bestDist = Math.hypot(HUB_X - e.x, HUB_Y - e.y);
 
     for (const b of engine.buildings) {
+      if (b.hp <= 0) continue; // destroyed buildings are invalid targets
       const d = Math.hypot(b.x - e.x, b.y - e.y);
       if (d < bestDist) {
         bestDist = d;
@@ -141,20 +142,16 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
     if (bestDist > attackRange) {
       e.x += Math.cos(e.angle) * e.speed * dt;
       e.y += Math.sin(e.angle) * e.speed * dt;
-    } else if (e.attackCooldown <= 0) {
+    }
+
+    // Intact walls are solid: push the enemy out and let it break through
+    // by attacking, instead of walking through or getting stuck forever.
+    const blockingWall = resolveWallCollision(engine, e);
+
+    if (bestDist <= attackRange && e.attackCooldown <= 0) {
       e.attackCooldown = e.type === 'behemoth' ? 1.4 : 1.1;
       if (e.type === 'spitter') {
-        engine.projectiles.push({
-          id: `proj_${Math.random()}`,
-          x: e.x,
-          y: e.y,
-          vx: Math.cos(e.angle) * 210,
-          vy: Math.sin(e.angle) * 210,
-          damage: 18,
-          life: 1.2,
-          color: '#4ade80',
-          isAcid: true,
-        });
+        fireAcidProjectile(engine, e);
       } else {
         const baseDmg = e.type === 'behemoth' ? 65 : e.type === 'goliath' ? 28 : 11;
         if (targetBuilding) {
@@ -164,11 +161,60 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
           engine.camera.shake = 5;
         }
       }
+    } else if (blockingWall && bestDist > attackRange && e.attackCooldown <= 0) {
+      e.attackCooldown = e.type === 'behemoth' ? 1.4 : 1.1;
+      e.angle = Math.atan2(blockingWall.y - e.y, blockingWall.x - e.x);
+      if (e.type === 'spitter') {
+        fireAcidProjectile(engine, e);
+      } else {
+        const baseDmg = e.type === 'behemoth' ? 65 : e.type === 'goliath' ? 28 : 11;
+        damageBuilding(engine, blockingWall, baseDmg);
+      }
     }
   }
 
   // Remove destroyed buildings
   engine.buildings = engine.buildings.filter((b) => b.hp > 0);
+}
+
+/**
+ * Simple circle collision against intact walls: pushes the enemy out of any
+ * wall overlap (allowing it to slide along the wall) and reports the blocker.
+ * Destroyed walls (hp <= 0) no longer block movement.
+ */
+function resolveWallCollision(engine: AetherGameEngine, e: EnemyEntity): BuildingEntity | null {
+  let blocker: BuildingEntity | null = null;
+  for (const b of engine.buildings) {
+    if (b.type !== 'wall' || b.hp <= 0) continue;
+    const minDist = e.radius + BUILDING_COLLISION_RADIUS;
+    const dx = e.x - b.x;
+    const dy = e.y - b.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < minDist) {
+      if (dist > 0.001) {
+        e.x = b.x + (dx / dist) * minDist;
+        e.y = b.y + (dy / dist) * minDist;
+      } else {
+        e.x = b.x + minDist; // exactly concentric: pick a deterministic push direction
+      }
+      blocker = b;
+    }
+  }
+  return blocker;
+}
+
+function fireAcidProjectile(engine: AetherGameEngine, e: EnemyEntity): void {
+  engine.projectiles.push({
+    id: `proj_${Math.random()}`,
+    x: e.x,
+    y: e.y,
+    vx: Math.cos(e.angle) * 210,
+    vy: Math.sin(e.angle) * 210,
+    damage: 18,
+    life: 1.2,
+    color: '#4ade80',
+    isAcid: true,
+  });
 }
 
 function spawnAcidPool(engine: AetherGameEngine, x: number, y: number): void {
