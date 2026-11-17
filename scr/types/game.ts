@@ -202,6 +202,8 @@ export interface RoverState {
 export interface HudSnapshot {
   elapsed: number;
   resources: Resources;
+  aetherReserve: number;
+  aetherAvailable: number;
   energyProd: number;
   energyUse: number;
   hubHp: number;

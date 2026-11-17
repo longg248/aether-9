@@ -44,10 +44,12 @@ export function updateCrashPods(engine: AetherGameEngine, dt: number): void {
 }
 
 export function updateWarpProgress(engine: AetherGameEngine, dt: number): void {
-  // Automatic Aether Transfer to Warp Engine
-  if (engine.resources.aether > 0.5 && engine.warpProgress < TARGET_WARP_AETHER) {
+  // Automatic Aether Transfer to Warp Engine — only consumes the surplus
+  // above the configurable reserve, keeping Aether available for upgrades.
+  const available = engine.resources.aether - engine.aetherReserve;
+  if (available > 0 && engine.warpProgress < TARGET_WARP_AETHER) {
     const rate = (12 + engine.upgrades.aether_capacitor * 6) * dt;
-    const transfer = Math.min(engine.resources.aether, rate, TARGET_WARP_AETHER - engine.warpProgress);
+    const transfer = Math.min(available, rate, TARGET_WARP_AETHER - engine.warpProgress);
     engine.resources.aether -= transfer;
     engine.warpProgress += transfer;
   }

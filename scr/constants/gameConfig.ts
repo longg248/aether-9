@@ -9,6 +9,9 @@ export const HUB_X = (HUB_GX + 0.5) * TILE_SIZE;
 export const HUB_Y = (HUB_GY + 0.5) * TILE_SIZE;
 export const TARGET_WARP_AETHER = 1200;
 
+// Aether kept back from the Warp Engine so upgrades/buildings stay affordable.
+export const DEFAULT_AETHER_RESERVE = 150;
+
 // Collision & area-effect tuning
 export const HUB_COLLISION_RADIUS = 56;
 export const BUILDING_COLLISION_RADIUS = TILE_SIZE * 0.5;

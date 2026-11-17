@@ -1,4 +1,4 @@
-import { HUB_X, HUB_Y, PHASES } from '@/constants/gameConfig';
+import { DEFAULT_AETHER_RESERVE, HUB_X, HUB_Y, PHASES } from '@/constants/gameConfig';
 import { createInitialResources, createInitialRover, createInitialUpgrades } from '@/engine/gameState';
 import { buildHudSnapshot } from '@/engine/hud';
 import { renderWorld } from '@/engine/rendering/renderer';
@@ -54,6 +54,7 @@ export class AetherGameEngine {
   public dayTime = 0.22; // 0..1 cycle (0.22 = crisp morning)
 
   public resources: Resources = createInitialResources();
+  public aetherReserve = DEFAULT_AETHER_RESERVE;
   public hubHp = 1200;
   public hubMaxHp = 1200;
   public warpProgress = 0;
@@ -103,6 +104,7 @@ export class AetherGameEngine {
     this.elapsed = 0;
     this.dayTime = 0.22;
     this.resources = createInitialResources();
+    this.aetherReserve = DEFAULT_AETHER_RESERVE;
     this.hubHp = 1200;
     this.hubMaxHp = 1200;
     this.warpProgress = 0;
@@ -162,6 +164,11 @@ export class AetherGameEngine {
 
   public buyUpgrade(id: string): void {
     buyUpgrade(this, id);
+  }
+
+  /** Configures how much Aether the Warp Engine must leave untouched. */
+  public setAetherReserve(value: number): void {
+    this.aetherReserve = Number.isFinite(value) ? Math.max(0, value) : DEFAULT_AETHER_RESERVE;
   }
 
   public triggerQuickRepair(): void {
