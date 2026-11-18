@@ -2,7 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import { BUILDINGS, GRID_SIZE, HUB_X, HUB_Y, TILE_SIZE } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
 import { IsoCamera, ViewportSize, worldToIso } from '@/engine/isometric/projection';
-import { getActivatedRelays } from '@/engine/systems/poiSystem';
+import { POI_CONFIG, getActivatedRelays } from '@/engine/systems/poiSystem';
 import { isTileRevealed } from '@/utils/proceduralTerrain';
 import {
   EntityView,
@@ -17,6 +17,16 @@ import {
   createRoverView,
 } from './entityViews';
 import { createGridSpaceContainer, hex, shade } from './isoGraphics';
+
+interface PoiPinView {
+  container: Container;
+  shape: Graphics;
+}
+
+function destroyPoiPin(view: PoiPinView): void {
+  view.shape.destroy();
+  view.container.destroy();
+}
 
 /**
  * Scene graph for the isometric world. Pure Pixi scene objects — constructible
@@ -37,9 +47,10 @@ export class IsoWorldScene {
   private readonly effectsG = new Graphics();
   private readonly ghostSpace = createGridSpaceContainer();
   private readonly ghostG = new Graphics();
-  private readonly fogSpace = createGridSpaceContainer();
+  readonly fogSpace = createGridSpaceContainer();
   private readonly fogG = new Graphics();
-  private readonly markerLayer = new Container();
+  readonly markerLayer = new Container();
+  readonly poiPinLayer = new Container();
   private readonly tintG = new Graphics();
 
   private readonly nodeViews = new Map<string, EntityView>();
@@ -48,6 +59,7 @@ export class IsoWorldScene {
   private readonly podViews = new Map<string, EntityView>();
   private readonly droneViews = new Map<string, EntityView>();
   private readonly enemyViews = new Map<string, EntityView>();
+  private readonly poiPinViews = new Map<string, PoiPinView>();
   private hubView: EntityView;
   private roverView: EntityView;
   private readonly textPool: Text[] = [];
@@ -61,6 +73,7 @@ export class IsoWorldScene {
     this.terrainSpace.addChild(this.terrainG);
     this.ghostSpace.addChild(this.ghostG);
     this.fogSpace.addChild(this.fogG);
+    this.markerLayer.addChild(this.poiPinLayer);
     this.worldLayer.addChild(
       this.terrainSpace,
       this.decalG,
@@ -170,6 +183,8 @@ export class IsoWorldScene {
     this.hubView.container.position.set(HUB_ISO.x, HUB_ISO.y);
     this.hubView.container.zIndex = HUB_X + HUB_Y;
     this.entityLayer.addChild(this.hubView.container, this.roverView.container);
+    for (const pin of this.poiPinViews.values()) destroyPoiPin(pin);
+    this.poiPinViews.clear();
     for (const text of this.textPool) text.destroy();
     this.textPool.length = 0;
   }
@@ -260,6 +275,42 @@ export class IsoWorldScene {
     }
   }
 
+  private syncPoiPins(zoom: number): void {
+    const seen = new Set<string>();
+    const inverseZoom = 1 / Math.max(0.0001, zoom);
+
+    for (const poi of this.engine.pois) {
+      if (!poi.discovered) continue;
+      seen.add(poi.id);
+      let view = this.poiPinViews.get(poi.id);
+      if (!view) {
+        const container = new Container({ label: `poi-pin:${poi.id}` });
+        const shape = new Graphics({ label: 'poi-pin-shape' })
+          .poly([0, 0, -6, -10, 0, -16, 6, -10])
+          .fill(0xffffff);
+        container.addChild(shape);
+        view = { container, shape };
+        this.poiPinViews.set(poi.id, view);
+        this.poiPinLayer.addChild(container);
+      }
+
+      const iso = worldToIso(poi);
+      view.container.position.set(iso.x, iso.y);
+      // Counter-scale the complete pin (including its stem) for a stable
+      // screen-space size while its anchor still follows the projected POI.
+      view.container.scale.set(inverseZoom);
+      view.shape.tint = poi.completed ? 0x64748b : hex(POI_CONFIG[poi.type].accent);
+      view.shape.alpha = poi.completed ? 0.8 : 1;
+    }
+
+    for (const [id, view] of this.poiPinViews) {
+      if (!seen.has(id)) {
+        destroyPoiPin(view);
+        this.poiPinViews.delete(id);
+      }
+    }
+  }
+
   private syncMarkers(): void {
     const texts = this.engine.floatingTexts;
     while (this.textPool.length < texts.length) {
@@ -342,6 +393,7 @@ export class IsoWorldScene {
     this.syncEffects();
     this.syncGhost();
     this.syncFog();
+    this.syncPoiPins(camera.zoom);
     this.syncMarkers();
     this.syncTint(viewport);
   }
