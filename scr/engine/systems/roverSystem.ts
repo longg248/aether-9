@@ -46,7 +46,7 @@ export function updateRoverMovement(engine: AetherGameEngine, dt: number): void 
   if (Math.hypot(engine.rover.vx, engine.rover.vy) > 8) {
     engine.rover.angle = Math.atan2(engine.rover.vy, engine.rover.vx);
     engine.rover.wheelPhase += dt * 16;
-    if (Math.random() < 0.45) {
+    if (engine.random.gameplay() < 0.45) {
       engine.tireTracks.push({ x: engine.rover.x, y: engine.rover.y, alpha: 0.35 });
       if (engine.tireTracks.length > 140) engine.tireTracks.shift();
     }
@@ -91,7 +91,7 @@ export function updateRoverCombat(engine: AetherGameEngine, dt: number): void {
       if (engine.rover.mineCooldown <= 0) {
         const speedMult = (1 + (engine.upgrades.rover_laser - 1) * 0.35) * overchargeMult;
         engine.rover.mineCooldown = 0.42 / speedMult;
-        const isCrit = Math.random() < 0.22;
+        const isCrit = engine.random.gameplay() < 0.22;
         const yieldAmt = isCrit ? 12 : 6;
         const mined = Math.min(targetNode.amount, yieldAmt);
         targetNode.amount -= mined;

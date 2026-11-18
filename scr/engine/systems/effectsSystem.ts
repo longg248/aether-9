@@ -5,7 +5,7 @@ export function pushLog(
   text: string,
   type: 'info' | 'warn' | 'ai' | 'good' = 'info'
 ): void {
-  engine.logs = [{ id: `${Date.now()}_${Math.random()}`, text, type }, ...engine.logs].slice(0, 6);
+  engine.logs = [{ id: `${Date.now()}_${engine.random.gameplay()}`, text, type }, ...engine.logs].slice(0, 6);
 }
 
 export function addFloatingText(
@@ -38,15 +38,15 @@ export function spawnParticles(
   glow = false
 ): void {
   for (let i = 0; i < count; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const spd = (0.25 + Math.random() * 0.75) * speed;
-    const life = 0.35 + Math.random() * 0.45;
+    const a = engine.random.gameplay() * Math.PI * 2;
+    const spd = (0.25 + engine.random.gameplay() * 0.75) * speed;
+    const life = 0.35 + engine.random.gameplay() * 0.45;
     engine.particles.push({
       x,
       y,
       vx: Math.cos(a) * spd,
       vy: Math.sin(a) * spd,
-      size: 2 + Math.random() * 3,
+      size: 2 + engine.random.gameplay() * 3,
       color,
       alpha: 1,
       life,

@@ -3,14 +3,14 @@ import type { AetherGameEngine } from '@/engine/gameEngine';
 import { POI_CONFIG, getActivatedRelays } from '@/engine/systems/poiSystem';
 import { isTileRevealed } from '@/utils/proceduralTerrain';
 
-export function drawTerrain(engine: AetherGameEngine, ctx: CanvasRenderingContext2D): void {
+export function drawTerrain(ctx: CanvasRenderingContext2D, terrainCanvas: HTMLCanvasElement): void {
   // Offscreen Terrain Layer
-  ctx.drawImage(engine.terrainCanvas, 0, 0);
+  ctx.drawImage(terrainCanvas, 0, 0);
 }
 
 export function drawFlora(engine: AetherGameEngine, ctx: CanvasRenderingContext2D, width: number, height: number): void {
   // Bioluminescent flora sway
-  for (const f of engine.flora) {
+  for (const f of engine.terrain.flora) {
     if (Math.abs(f.x - engine.camera.x) > width * 0.65 || Math.abs(f.y - engine.camera.y) > height * 0.65) continue;
     const sway = Math.sin(engine.elapsed * 2 + f.phase) * 2.5;
     ctx.fillStyle = `hsla(${f.hue}, 85%, 62%, 0.45)`;

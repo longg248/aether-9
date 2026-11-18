@@ -3,10 +3,11 @@ import { TARGET_WARP_AETHER } from '@/constants/gameConfig';
 import { makeEngine, tick } from './helpers';
 
 describe('test infrastructure smoke', () => {
-  it('constructs the engine with a stubbed terrain canvas', () => {
+  it('constructs the engine with pure terrain data (no canvas required)', () => {
     const engine = makeEngine();
     expect(engine.status).toBe('playing');
-    expect(engine.terrainCanvas).toBeTruthy();
+    expect(engine.terrain.craters.length).toBeGreaterThan(0);
+    expect(engine.terrain.flora.length).toBeGreaterThan(0);
     expect(engine.resources.aether).toBeGreaterThanOrEqual(0);
   });
 

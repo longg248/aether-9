@@ -7,8 +7,8 @@ export function updateCrashPods(engine: AetherGameEngine, dt: number): void {
   engine.podTimer -= dt;
   if (engine.podTimer <= 0 && engine.crashPods.filter((p) => !p.opened).length < 2) {
     engine.podTimer = 75;
-    const gx = 4 + Math.floor(Math.random() * (GRID_SIZE - 8));
-    const gy = 4 + Math.floor(Math.random() * (GRID_SIZE - 8));
+    const gx = 4 + Math.floor(engine.random.gameplay() * (GRID_SIZE - 8));
+    const gy = 4 + Math.floor(engine.random.gameplay() * (GRID_SIZE - 8));
     if (Math.hypot(gx - HUB_GX, gy - HUB_GY) > 7) {
       engine.crashPods.push({
         id: `pod_${Date.now()}`,
@@ -88,9 +88,9 @@ export function updateStorms(engine: AetherGameEngine, dt: number): void {
     }
   } else {
     engine.stormDuration -= dt;
-    if (Math.random() < dt * 2.2) {
-      const lx = HUB_X + (Math.random() - 0.5) * 650;
-      const ly = HUB_Y + (Math.random() - 0.5) * 650;
+    if (engine.random.gameplay() < dt * 2.2) {
+      const lx = HUB_X + (engine.random.gameplay() - 0.5) * 650;
+      const ly = HUB_Y + (engine.random.gameplay() - 0.5) * 650;
       engine.camera.shake = 7;
       soundEngine.storm();
       engine.lightnings.push({

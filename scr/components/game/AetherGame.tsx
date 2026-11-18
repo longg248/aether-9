@@ -30,14 +30,20 @@ import {
   UPGRADES,
 } from '@/constants/gameConfig';
 import { AetherGameEngine } from '@/engine/gameEngine';
+import { GameSession } from '@/engine/core/gameSession';
+import { createRenderer } from '@/engine/rendering/createRenderer';
 import { getUpgradeCost, getUpgradeState } from '@/engine/systems/buildingSystem';
 import { clearHeldKeys, handleKeyDown, handleKeyUp } from '@/engine/systems/inputSystem';
+import { applyIsoMovementKeys, isIsoMovementKey } from '@/engine/systems/isoInput';
 import { BuildingType, GameSpeed, GameStatus, HudSnapshot } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
 
 export default function AetherGame() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<AetherGameEngine | null>(null);
+  const sessionRef = useRef<GameSession | null>(null);
+  const rendererKindRef = useRef<'pixi' | 'canvas'>('canvas');
+  const physicalKeysRef = useRef(new Set<string>());
 
   const [status, setStatus] = useState<GameStatus>('intro');
   const [speed, setSpeed] = useState<GameSpeed>(1);
@@ -50,49 +56,42 @@ export default function AetherGame() {
     const engine = new AetherGameEngine();
     engineRef.current = engine;
     setHud(engine.getHudSnapshot());
+    // Stable Set identity — captured so the cleanup doesn't read the ref late.
+    const physicalKeys = physicalKeysRef.current;
 
-    let animId = 0;
-    let lastTime = performance.now();
-    let hudAccum = 0;
-    let disposed = false;
-
-    const loop = (now: number) => {
-      if (disposed) return; // guard against duplicate/zombie animation loops
-      const dt = Math.max(0, (now - lastTime) / 1000); // first rAF timestamp can predate lastTime
-      lastTime = now;
-
-      engine.update(dt);
-
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        if (canvas.width !== Math.floor(rect.width * dpr) || canvas.height !== Math.floor(rect.height * dpr)) {
-          canvas.width = Math.floor(rect.width * dpr);
-          canvas.height = Math.floor(rect.height * dpr);
-        }
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.save();
-          ctx.scale(dpr, dpr);
-          engine.render(ctx, rect.width, rect.height);
-          ctx.restore();
-        }
+    // Renderer creation is async (WebGL probe + lazy Pixi import). StrictMode
+    // can unmount while it is pending — the cancelled flag disposes the result.
+    let cancelled = false;
+    let session: GameSession | null = null;
+    void (async () => {
+      const renderer = await createRenderer();
+      if (cancelled) {
+        renderer.destroy();
+        return;
       }
+      rendererKindRef.current = renderer.kind;
+      session = new GameSession(engine, renderer);
+      sessionRef.current = session;
+      if (hostRef.current) await session.attach(hostRef.current);
+    })();
 
-      hudAccum += dt;
-      if (hudAccum >= 0.1) {
-        hudAccum = 0;
-        setHud(engine.getHudSnapshot());
-        setStatus(engine.status);
-      }
-
-      animId = requestAnimationFrame(loop);
-    };
-
-    animId = requestAnimationFrame(loop);
+    // HUD state is polled independently of the render loop (10 Hz).
+    const hudTimer = window.setInterval(() => {
+      setHud(engine.getHudSnapshot());
+      setStatus(engine.status);
+    }, 100);
 
     const onKeyDown = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (rendererKindRef.current === 'pixi' && isIsoMovementKey(k)) {
+        // Iso view: physical keys map to logical world-axis pairs (see isoInput).
+        if (engine.status === 'playing') {
+          physicalKeys.add(k);
+          applyIsoMovementKeys(engine, physicalKeys);
+        }
+        if (k.startsWith('arrow')) e.preventDefault();
+        return;
+      }
       const preventDefault = handleKeyDown(engine, e.key, {
         onSelectBuild: setSelectedBuild,
         onToggleTech: () => setShowTech((prev) => !prev),
@@ -102,19 +101,27 @@ export default function AetherGame() {
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (rendererKindRef.current === 'pixi' && isIsoMovementKey(k)) {
+        physicalKeys.delete(k);
+        applyIsoMovementKeys(engine, physicalKeys);
+        return;
+      }
       handleKeyUp(engine, e.key);
     };
 
     // Held keys must not survive focus loss (alt-tab, clicking outside, tab hide).
     const onBlur = () => {
       clearHeldKeys(engine);
+      physicalKeys.clear();
     };
 
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         clearHeldKeys(engine);
+        physicalKeys.clear();
       } else {
-        lastTime = performance.now(); // avoid a giant dt spike on return
+        session?.resetClock(); // avoid a giant dt spike on return
       }
     };
 
@@ -123,9 +130,12 @@ export default function AetherGame() {
     window.addEventListener('blur', onBlur);
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
-      disposed = true;
-      cancelAnimationFrame(animId);
+      cancelled = true;
+      window.clearInterval(hudTimer);
+      session?.detach();
+      sessionRef.current = null;
       clearHeldKeys(engine);
+      physicalKeys.clear();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
@@ -137,6 +147,7 @@ export default function AetherGame() {
     const engine = engineRef.current;
     if (!engine) return;
     engine.reset(); // also clears keys, hoverTile and selectedBuild
+    physicalKeysRef.current.clear();
     engine.status = 'playing';
     engine.speed = 1;
     setSpeed(1);
@@ -184,31 +195,31 @@ export default function AetherGame() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100 select-none">
-      {/* 2D Interactive World Canvas */}
-      <canvas
-        ref={canvasRef}
+      {/* Interactive world viewport: the active renderer owns its canvas inside. */}
+      <div
+        ref={hostRef}
         onMouseMove={(e) => {
           const engine = engineRef.current;
-          const canvas = canvasRef.current;
-          if (!engine || !canvas) return;
-          const rect = canvas.getBoundingClientRect();
-          const worldX = e.clientX - rect.left + (engine.camera.x - rect.width / 2);
-          const worldY = e.clientY - rect.top + (engine.camera.y - rect.height / 2);
+          const session = sessionRef.current;
+          const host = hostRef.current;
+          if (!engine || !session || !host) return;
+          const rect = host.getBoundingClientRect();
+          const world = session.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
           engine.hoverTile = {
-            gx: Math.floor(worldX / TILE_SIZE),
-            gy: Math.floor(worldY / TILE_SIZE),
+            gx: Math.floor(world.x / TILE_SIZE),
+            gy: Math.floor(world.y / TILE_SIZE),
           };
         }}
         onClick={(e) => {
           const engine = engineRef.current;
-          const canvas = canvasRef.current;
-          if (!engine || !canvas) return;
-          const rect = canvas.getBoundingClientRect();
-          const worldX = e.clientX - rect.left + (engine.camera.x - rect.width / 2);
-          const worldY = e.clientY - rect.top + (engine.camera.y - rect.height / 2);
-          engine.handleWorldClick(worldX, worldY);
+          const session = sessionRef.current;
+          const host = hostRef.current;
+          if (!engine || !session || !host) return;
+          const rect = host.getBoundingClientRect();
+          const world = session.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+          engine.handleWorldClick(world.x, world.y);
         }}
-        className="h-full w-full cursor-crosshair block"
+        className="h-full w-full cursor-crosshair"
       />
 
       {/* TOP HUD BAR */}

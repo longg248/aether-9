@@ -5,10 +5,11 @@ import {
   HUB_X,
   HUB_Y,
   PHASES,
+  WORLD_SEED,
 } from '@/constants/gameConfig';
+import { RandomService } from '@/engine/core/randomService';
 import { createInitialResources, createInitialRover, createInitialUpgrades } from '@/engine/gameState';
 import { buildHudSnapshot } from '@/engine/hud';
-import { renderWorld } from '@/engine/rendering/renderer';
 import {
   buyUpgrade,
   canBuildAt,
@@ -51,14 +52,18 @@ import {
   Resources,
   RoverState,
 } from '@/types/game';
-import { CraterDecor, FloraDecor, createProceduralTerrain, generateResourceNodes } from '@/utils/proceduralTerrain';
+import { TerrainData, generateTerrainData } from '@/engine/world/terrainData';
+import { generateResourceNodes } from '@/utils/proceduralTerrain';
 
 export class AetherGameEngine {
-  public readonly terrainCanvas: HTMLCanvasElement;
-  private craters: CraterDecor[];
-  public readonly flora: FloraDecor[];
+  /** Pure world decor data — renderers build their own textures from it. */
+  public readonly terrain: TerrainData;
+  /** Seeded worldgen streams + per-run gameplay stream (see RandomService). */
+  public random: RandomService;
 
   public status: GameStatus = 'intro';
+  /** Incremented on every reset so renderers can detect a new run. */
+  public runId = 0;
   public speed: GameSpeed = 1;
   public elapsed = 0;
   public dayTime = 0.22; // 0..1 cycle (0.22 = crisp morning)
@@ -108,15 +113,16 @@ export class AetherGameEngine {
 
   public logs: { id: string; text: string; type: 'info' | 'warn' | 'ai' | 'good' }[] = [];
 
-  constructor() {
-    const terrain = createProceduralTerrain();
-    this.terrainCanvas = terrain.canvas;
-    this.craters = terrain.craters;
-    this.flora = terrain.flora;
+  constructor(worldSeed: number = WORLD_SEED) {
+    this.terrain = generateTerrainData();
+    this.random = new RandomService(worldSeed);
     this.reset();
   }
 
   public reset(): void {
+    this.runId++;
+    // Re-seed worldgen so every run reproduces the same world from the seed.
+    this.random = new RandomService(this.random.worldSeed);
     this.elapsed = 0;
     this.dayTime = 0.22;
     this.resources = createInitialResources();
@@ -130,8 +136,8 @@ export class AetherGameEngine {
     // POIs are seeded/deterministic; nodes avoid POI tiles, deposits join the
     // node economy as finite aether nodes.
     this.pois = generatePOIs();
-    this.nodes = generateResourceNodes(this.pois);
-    this.nodes.push(...createDepositNodes(this.pois));
+    this.nodes = generateResourceNodes(this.pois, this.random.resources);
+    this.nodes.push(...createDepositNodes(this.pois, this.random.resources));
     this.drones = [];
     this.enemies = [];
     this.crashPods = [];
@@ -248,10 +254,6 @@ export class AetherGameEngine {
     updateEffects(this, dt);
     updateObjectives(this);
     checkGameEnd(this);
-  }
-
-  public render(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    renderWorld(this, ctx, width, height);
   }
 
   public getHudSnapshot(): HudSnapshot {

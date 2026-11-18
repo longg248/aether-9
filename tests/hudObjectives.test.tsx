@@ -44,6 +44,7 @@ describe('AetherGame: objective card reflects engine state', () => {
     startGame();
     const engine = getEngine();
     engine.stormTimer = 500;
+    engine.nodes = []; // no auto-mining income: reward accounting stays exact
     await screen.findByText('Khảo sát bề mặt');
 
     const silBefore = engine.resources.silicate;

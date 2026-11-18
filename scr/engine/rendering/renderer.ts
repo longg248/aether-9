@@ -15,7 +15,13 @@ import {
   drawTerrain,
 } from '@/engine/rendering/worldRenderer';
 
-export function renderWorld(engine: AetherGameEngine, ctx: CanvasRenderingContext2D, width: number, height: number): void {
+export function renderWorld(
+  engine: AetherGameEngine,
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  terrainCanvas: HTMLCanvasElement
+): void {
   ctx.save();
   ctx.fillStyle = '#09060c';
   ctx.fillRect(0, 0, width, height);
@@ -28,7 +34,7 @@ export function renderWorld(engine: AetherGameEngine, ctx: CanvasRenderingContex
   ctx.translate(-camX, -camY);
 
   // World layers (terrain, decor, nodes, pods, hub)
-  drawTerrain(engine, ctx);
+  drawTerrain(ctx, terrainCanvas);
   drawFlora(engine, ctx, width, height);
   drawGroundDecals(engine, ctx);
   drawResourceNodes(engine, ctx);
