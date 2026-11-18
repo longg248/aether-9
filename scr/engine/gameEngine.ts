@@ -65,7 +65,7 @@ export class AetherGameEngine {
   public readonly terrain: TerrainData;
   /** Seeded worldgen streams + per-run gameplay stream (see RandomService). */
   public random: RandomService;
-  public readonly difficulty: Difficulty;
+  public difficulty: Difficulty;
 
   public status: GameStatus = 'intro';
   /** Incremented on every reset so renderers can detect a new run. */

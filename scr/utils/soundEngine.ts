@@ -1,9 +1,14 @@
 class SoundEngine {
   private ctx: AudioContext | null = null;
   public muted = false;
+  public masterVolume = 1;
+
+  public setMasterVolume(value: number): void {
+    this.masterVolume = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
+  }
 
   private ensureContext(): AudioContext | null {
-    if (this.muted || typeof window === 'undefined') return null;
+    if (this.muted || this.masterVolume <= 0 || typeof window === 'undefined') return null;
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) this.ctx = new AudioCtx();
@@ -30,7 +35,7 @@ class SoundEngine {
       osc.frequency.setValueAtTime(freq, ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), ctx.currentTime + duration);
 
-      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.setValueAtTime(volume * this.masterVolume, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
 
       osc.connect(gain);

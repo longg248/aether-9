@@ -1,14 +1,29 @@
-import { Activity, Hammer, Play, RotateCcw, Sparkles } from 'lucide-react';
+import { Activity, Hammer, Play, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import { GameStatus } from '@/types/game';
 import { formatTime } from './formatTime';
+import { SettingsPanel, SettingsPanelProps } from './SettingsPanel';
 
 interface StatusOverlayProps {
   status: GameStatus;
   elapsed: number;
+  canContinue: boolean;
+  notice: string | null;
+  settings: SettingsPanelProps;
   onStart: () => void;
+  onContinue: () => void;
+  onDelete: () => void;
 }
 
-export function StatusOverlay({ status, elapsed, onStart }: StatusOverlayProps) {
+export function StatusOverlay({
+  status,
+  elapsed,
+  canContinue,
+  notice,
+  settings,
+  onStart,
+  onContinue,
+  onDelete,
+}: StatusOverlayProps) {
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/85 p-6 backdrop-blur-md">
       <div className="max-w-lg rounded-3xl border border-slate-800 bg-slate-900/95 p-8 text-center shadow-2xl">
@@ -45,6 +60,32 @@ export function StatusOverlay({ status, elapsed, onStart }: StatusOverlayProps) 
           {status === 'intro' ? <Play className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
           <span>{status === 'intro' ? 'BẮT ĐẦU NHIỆM VỤ' : 'CHƠI LẠI TỪ ĐẦU'}</span>
         </button>
+
+        {status === 'intro' && (
+          <>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                disabled={!canContinue}
+                onClick={onContinue}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+              >
+                Tiếp tục
+              </button>
+              <button
+                type="button"
+                disabled={!canContinue}
+                onClick={onDelete}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-rose-300 hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-600"
+              >
+                <Trash2 className="h-4 w-4" />
+                Xóa dữ liệu
+              </button>
+            </div>
+            {notice && <p role="status" className="mt-3 text-xs text-emerald-300">{notice}</p>}
+            <SettingsPanel {...settings} />
+          </>
+        )}
       </div>
     </div>
   );

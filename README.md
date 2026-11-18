@@ -33,6 +33,7 @@ AETHER-9 is a 2D isometric survival / base-building game: pilot the Engineer Rov
 - **T** — toggle the tech tree; **Esc** — close panels and cancel building selection.
 - **1–8** — select the building shown in the construction dock.
 - The top HUD provides pause, 1×/2× speed, and audio controls. The Canvas fallback keeps the original top-down WASD mapping and does not add iso pan/zoom.
+- The intro/pause menus provide continue, manual save, save deletion, volume, mute, and default-speed settings. The game autosaves every 30 seconds during active play; a four-step first-run tutorial is remembered after dismissal.
 
 ## Tech stack
 
@@ -75,6 +76,7 @@ scr/
   engine/
     core/                         Session, loop, and seeded random services
     isometric/                    Iso projection and render-side camera
+    persistence/                  Versioned save types, validation, serialize/apply
     systems/                      Pure gameplay systems and input mapping
     world/                        Terrain data
     gameEngine.ts                 Simulation facade

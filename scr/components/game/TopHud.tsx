@@ -100,6 +100,7 @@ export function TopHud({ hud, speed, muted, onSpeedChange, onToggleMute }: TopHu
           {([0, 1, 2] as GameSpeed[]).map((sp) => (
             <button
               key={sp}
+              aria-label={sp === 0 ? 'Tạm dừng' : undefined}
               onClick={() => onSpeedChange(sp)}
               className={`rounded-md px-2 py-1 text-xs font-bold transition ${
                 speed === sp ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
