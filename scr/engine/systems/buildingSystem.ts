@@ -117,7 +117,7 @@ export function placeBuilding(engine: AetherGameEngine, gx: number, gy: number, 
   const linkedNode = type === 'drill' ? engine.nodes.find((n) => n.gx === gx && n.gy === gy) : undefined;
 
   const building: BuildingEntity = {
-    id: `bld_${Date.now()}_${Math.random()}`,
+    id: `bld_${Date.now()}_${engine.random.gameplay()}`,
     type,
     gx,
     gy,
@@ -126,7 +126,7 @@ export function placeBuilding(engine: AetherGameEngine, gx: number, gy: number, 
     hp: cfg.maxHp,
     maxHp: cfg.maxHp,
     cooldown: 0,
-    animPhase: Math.random() * Math.PI * 2,
+    animPhase: engine.random.gameplay() * Math.PI * 2,
     angle: 0,
     recoil: 0,
     hitFlash: 0,

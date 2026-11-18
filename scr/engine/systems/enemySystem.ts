@@ -81,13 +81,13 @@ export function spawnEnemyWave(engine: AetherGameEngine): void {
   engine.waveCount++;
   const params = getWaveParams(engine.waveCount);
   engine.waveTimer = params.nextWaveIn;
-  const side = Math.floor(Math.random() * 4);
+  const side = Math.floor(engine.random.gameplay() * 4);
   engine.pushLog(`Cảnh báo: Đợt Bọ Tinh Thể #${engine.waveCount} đang tiến công!`, 'warn');
 
   for (let i = 0; i < params.count; i++) {
     let sx = 60;
     let sy = 60;
-    const offset = 200 + Math.random() * (WORLD_SIZE - 400);
+    const offset = 200 + engine.random.gameplay() * (WORLD_SIZE - 400);
     if (side === 0) {
       sx = offset;
       sy = 50;
@@ -109,8 +109,8 @@ export function spawnEnemyWave(engine: AetherGameEngine): void {
     if (engine.waveCount >= 6 && i % 4 === 2) type = 'goliath';
     if (engine.waveCount >= 7 && i % 5 === 3) type = 'spitter';
 
-    const elite = engine.waveCount >= ELITE_WAVE_START && Math.random() < ELITE_CHANCE;
-    createEnemy(engine, type, sx + (Math.random() - 0.5) * 90, sy + (Math.random() - 0.5) * 90, params.hpScale, elite);
+    const elite = engine.waveCount >= ELITE_WAVE_START && engine.random.gameplay() < ELITE_CHANCE;
+    createEnemy(engine, type, sx + (engine.random.gameplay() - 0.5) * 90, sy + (engine.random.gameplay() - 0.5) * 90, params.hpScale, elite);
   }
 
   // Spawn Behemoth Boss in Phase 4+
@@ -143,7 +143,7 @@ export function createEnemy(
   const s = stats[type];
   const hp = elite ? s.hp * ELITE_HP_MULT : s.hp;
   const enemy: EnemyEntity = {
-    id: `enm_${Date.now()}_${Math.random()}_${enemySeq++}`,
+    id: `enm_${Date.now()}_${engine.random.gameplay()}_${enemySeq++}`,
     type,
     x,
     y,
@@ -151,7 +151,7 @@ export function createEnemy(
     maxHp: hp,
     speed: elite ? s.speed * ELITE_SPEED_MULT : s.speed,
     radius: elite ? s.radius + 2 : s.radius,
-    legPhase: Math.random() * Math.PI * 2,
+    legPhase: engine.random.gameplay() * Math.PI * 2,
     attackCooldown: 0,
     stunTimer: 0,
     hitFlash: 0,
@@ -182,7 +182,7 @@ export function updateEnemies(engine: AetherGameEngine, dt: number): void {
         // Elites always drop Aether — a reliable reward for focused fire.
         engine.resources.aether += ELITE_AETHER_DROP;
         engine.addFloatingText(e.x, e.y - 14, `+${ELITE_AETHER_DROP} Aether`, '#facc15', 0.95);
-      } else if (Math.random() < 0.35) {
+      } else if (engine.random.gameplay() < 0.35) {
         engine.resources.aether += 3;
       }
       engine.enemies.splice(i, 1);
@@ -544,7 +544,7 @@ function segmentHitsCircle(
 
 function fireAcidProjectile(engine: AetherGameEngine, e: EnemyEntity): void {
   engine.projectiles.push({
-    id: `proj_${Math.random()}`,
+    id: `proj_${engine.random.gameplay()}`,
     x: e.x,
     y: e.y,
     vx: Math.cos(e.angle) * 210,

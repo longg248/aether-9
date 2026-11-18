@@ -1,4 +1,5 @@
 import { GRID_SIZE, HUB_GX, HUB_GY, TILE_SIZE, WORLD_SEED } from '@/constants/gameConfig';
+import { RandomStream, defaultResourceStream } from '@/engine/core/randomService';
 import type { AetherGameEngine } from '@/engine/gameEngine';
 import { createEnemy } from '@/engine/systems/enemySystem';
 import { PoiEntity, PoiType, ResourceNode, Resources } from '@/types/game';
@@ -127,7 +128,10 @@ export function generatePOIs(seed: number = WORLD_SEED): PoiEntity[] {
 }
 
 /** Ancient deposits are ordinary finite resource nodes: drills/drones reuse them. */
-export function createDepositNodes(pois: PoiEntity[]): ResourceNode[] {
+export function createDepositNodes(
+  pois: PoiEntity[],
+  rand: RandomStream = defaultResourceStream(WORLD_SEED)
+): ResourceNode[] {
   return pois
     .filter((p) => p.type === 'aether_deposit')
     .map((p) => ({
@@ -139,8 +143,8 @@ export function createDepositNodes(pois: PoiEntity[]): ResourceNode[] {
       y: p.y,
       amount: DEPOSIT_AMOUNT,
       maxAmount: DEPOSIT_AMOUNT,
-      pulse: Math.random() * Math.PI * 2,
-      seed: Math.random() * 100,
+      pulse: rand() * Math.PI * 2,
+      seed: rand() * 100,
     }));
 }
 
