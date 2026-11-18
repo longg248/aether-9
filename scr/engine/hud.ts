@@ -1,4 +1,5 @@
 import type { AetherGameEngine } from '@/engine/gameEngine';
+import { buildMinimapSnapshot } from '@/engine/rendering/minimap';
 import { hasLivingLab } from '@/engine/systems/buildingSystem';
 import { OBJECTIVES, getActiveObjective } from '@/engine/systems/objectiveSystem';
 import { HudSnapshot } from '@/types/game';
@@ -47,6 +48,7 @@ export function buildHudSnapshot(engine: AetherGameEngine): HudSnapshot {
       discovered: engine.pois.filter((p) => p.discovered).length,
       total: engine.pois.length,
     },
+    minimap: buildMinimapSnapshot(engine),
     dayTime: engine.dayTime,
     upgrades: { ...engine.upgrades },
     hasLab: hasLivingLab(engine.buildings),

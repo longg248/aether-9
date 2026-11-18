@@ -1,8 +1,16 @@
-import { Container, Graphics, Text } from 'pixi.js';
-import { BUILDINGS, GRID_SIZE, HUB_X, HUB_Y, TILE_SIZE } from '@/constants/gameConfig';
+import {
+  Container,
+  Graphics,
+  Particle as PixiParticle,
+  ParticleContainer,
+  Rectangle,
+  Text,
+  Texture,
+} from 'pixi.js';
+import { BUILDINGS, GRID_SIZE, HUB_X, HUB_Y, TILE_SIZE, WORLD_SIZE } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
 import { IsoCamera, ViewportSize, worldToIso } from '@/engine/isometric/projection';
-import { getActivatedRelays } from '@/engine/systems/poiSystem';
+import { POI_CONFIG, getActivatedRelays } from '@/engine/systems/poiSystem';
 import { isTileRevealed } from '@/utils/proceduralTerrain';
 import {
   EntityView,
@@ -17,6 +25,38 @@ import {
   createRoverView,
 } from './entityViews';
 import { createGridSpaceContainer, hex, shade } from './isoGraphics';
+
+const PARTICLE_TEXTURE_RADIUS = 7;
+let sharedParticleTexture: Texture | null = null;
+
+/** One small canvas texture, shared by every pooled particle and scene. */
+function getParticleTexture(): Texture {
+  if (sharedParticleTexture) return sharedParticleTexture;
+  if (typeof document === 'undefined') return Texture.WHITE;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = PARTICLE_TEXTURE_RADIUS * 2 + 2;
+  canvas.height = PARTICLE_TEXTURE_RADIUS * 2 + 2;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return Texture.WHITE;
+  const center = PARTICLE_TEXTURE_RADIUS + 1;
+  ctx.beginPath();
+  ctx.arc(center, center, PARTICLE_TEXTURE_RADIUS, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  sharedParticleTexture = Texture.from(canvas, true);
+  return sharedParticleTexture;
+}
+
+interface PoiPinView {
+  container: Container;
+  shape: Graphics;
+}
+
+function destroyPoiPin(view: PoiPinView): void {
+  view.shape.destroy();
+  view.container.destroy();
+}
 
 /**
  * Scene graph for the isometric world. Pure Pixi scene objects — constructible
@@ -34,12 +74,20 @@ export class IsoWorldScene {
   private readonly terrainG = new Graphics();
   private readonly decalG = new Graphics();
   readonly entityLayer = new Container();
+  private readonly effectsLayer = new Container();
   private readonly effectsG = new Graphics();
+  readonly particleLayer = new ParticleContainer<PixiParticle>({
+    texture: getParticleTexture(),
+    boundsArea: new Rectangle(-WORLD_SIZE, -128, WORLD_SIZE * 2, WORLD_SIZE + 256),
+    dynamicProperties: { position: true, vertex: true, color: true },
+  });
+  private readonly particlePool: PixiParticle[] = [];
   private readonly ghostSpace = createGridSpaceContainer();
   private readonly ghostG = new Graphics();
-  private readonly fogSpace = createGridSpaceContainer();
+  readonly fogSpace = createGridSpaceContainer();
   private readonly fogG = new Graphics();
-  private readonly markerLayer = new Container();
+  readonly markerLayer = new Container();
+  readonly poiPinLayer = new Container();
   private readonly tintG = new Graphics();
 
   private readonly nodeViews = new Map<string, EntityView>();
@@ -48,6 +96,7 @@ export class IsoWorldScene {
   private readonly podViews = new Map<string, EntityView>();
   private readonly droneViews = new Map<string, EntityView>();
   private readonly enemyViews = new Map<string, EntityView>();
+  private readonly poiPinViews = new Map<string, PoiPinView>();
   private hubView: EntityView;
   private roverView: EntityView;
   private readonly textPool: Text[] = [];
@@ -58,14 +107,17 @@ export class IsoWorldScene {
   constructor(private readonly engine: AetherGameEngine) {
     this.entityLayer.sortableChildren = true;
     this.effectsG.blendMode = 'add';
+    this.particleLayer.blendMode = 'add';
+    this.effectsLayer.addChild(this.effectsG, this.particleLayer);
     this.terrainSpace.addChild(this.terrainG);
     this.ghostSpace.addChild(this.ghostG);
     this.fogSpace.addChild(this.fogG);
+    this.markerLayer.addChild(this.poiPinLayer);
     this.worldLayer.addChild(
       this.terrainSpace,
       this.decalG,
       this.entityLayer,
-      this.effectsG,
+      this.effectsLayer,
       this.ghostSpace,
       this.fogSpace,
       this.markerLayer
@@ -170,6 +222,8 @@ export class IsoWorldScene {
     this.hubView.container.position.set(HUB_ISO.x, HUB_ISO.y);
     this.hubView.container.zIndex = HUB_X + HUB_Y;
     this.entityLayer.addChild(this.hubView.container, this.roverView.container);
+    for (const pin of this.poiPinViews.values()) destroyPoiPin(pin);
+    this.poiPinViews.clear();
     for (const text of this.textPool) text.destroy();
     this.textPool.length = 0;
   }
@@ -213,9 +267,41 @@ export class IsoWorldScene {
       const p = worldToIso(proj);
       g.circle(p.x, p.y - 6, proj.isAcid ? 4 : 2.5).fill({ color: hex(proj.color), alpha: 0.95 });
     }
-    for (const part of e.particles) {
-      const p = worldToIso(part);
-      g.circle(p.x, p.y - 4, part.size).fill({ color: hex(part.color), alpha: Math.max(0, part.alpha) });
+    this.syncParticles();
+  }
+
+  private syncParticles(): void {
+    const particles = this.engine.particles;
+    const texture = getParticleTexture();
+
+    // Grow only to the maximum concurrent count. Inactive slots stay in the
+    // container with alpha 0, avoiding add/remove uploads on every emitter tick.
+    while (this.particlePool.length < particles.length) {
+      const particle = new PixiParticle({
+        texture,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        alpha: 0,
+      });
+      this.particlePool.push(particle);
+      this.particleLayer.addParticle(particle);
+    }
+
+    for (let i = 0; i < this.particlePool.length; i++) {
+      const particle = this.particlePool[i];
+      const part = particles[i];
+      if (!part) {
+        particle.alpha = 0;
+        continue;
+      }
+      const iso = worldToIso(part);
+      const scale = Math.max(0, part.size) / PARTICLE_TEXTURE_RADIUS;
+      particle.x = iso.x;
+      particle.y = iso.y - 4;
+      particle.scaleX = scale;
+      particle.scaleY = scale;
+      particle.tint = hex(part.color);
+      particle.alpha = Math.max(0, part.alpha);
     }
   }
 
@@ -256,6 +342,42 @@ export class IsoWorldScene {
         if (!isTileRevealed(gx, gy, e.rover.x, e.rover.y, e.buildings, relays)) {
           g.rect(gx, gy, 1.02, 1.02).fill({ color: 0x07050c, alpha: 0.84 });
         }
+      }
+    }
+  }
+
+  private syncPoiPins(zoom: number): void {
+    const seen = new Set<string>();
+    const inverseZoom = 1 / Math.max(0.0001, zoom);
+
+    for (const poi of this.engine.pois) {
+      if (!poi.discovered) continue;
+      seen.add(poi.id);
+      let view = this.poiPinViews.get(poi.id);
+      if (!view) {
+        const container = new Container({ label: `poi-pin:${poi.id}` });
+        const shape = new Graphics({ label: 'poi-pin-shape' })
+          .poly([0, 0, -6, -10, 0, -16, 6, -10])
+          .fill(0xffffff);
+        container.addChild(shape);
+        view = { container, shape };
+        this.poiPinViews.set(poi.id, view);
+        this.poiPinLayer.addChild(container);
+      }
+
+      const iso = worldToIso(poi);
+      view.container.position.set(iso.x, iso.y);
+      // Counter-scale the complete pin (including its stem) for a stable
+      // screen-space size while its anchor still follows the projected POI.
+      view.container.scale.set(inverseZoom);
+      view.shape.tint = poi.completed ? 0x64748b : hex(POI_CONFIG[poi.type].accent);
+      view.shape.alpha = poi.completed ? 0.8 : 1;
+    }
+
+    for (const [id, view] of this.poiPinViews) {
+      if (!seen.has(id)) {
+        destroyPoiPin(view);
+        this.poiPinViews.delete(id);
       }
     }
   }
@@ -342,6 +464,7 @@ export class IsoWorldScene {
     this.syncEffects();
     this.syncGhost();
     this.syncFog();
+    this.syncPoiPins(camera.zoom);
     this.syncMarkers();
     this.syncTint(viewport);
   }
