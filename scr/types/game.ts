@@ -237,6 +237,14 @@ export interface RoverState {
   overchargeTimer: number;
 }
 
+export interface MinimapSnapshot {
+  hub: { x: number; y: number };
+  rover: { x: number; y: number };
+  pois: { id: string; type: PoiType; x: number; y: number; completed: boolean }[];
+  enemies: { id: string; x: number; y: number; elite: boolean }[];
+  revealedTiles: { gx: number; gy: number }[];
+}
+
 export interface HudSnapshot {
   elapsed: number;
   /** Spendable balance: resources.aether is what upgrades/buildings consume. */
@@ -270,6 +278,8 @@ export interface HudSnapshot {
   objectivesTotal: number;
   /** Exploration overview: discovered vs total points of interest. */
   poi: { discovered: number; total: number };
+  /** Read-only tactical minimap model; reveal filtering matches the world renderer. */
+  minimap: MinimapSnapshot;
   dayTime: number;
   upgrades: Record<string, number>;
   hasLab: boolean;

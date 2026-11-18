@@ -11,6 +11,7 @@ import { BuildingType, GameSpeed, GameStatus, HudSnapshot } from '@/types/game';
 import { soundEngine } from '@/utils/soundEngine';
 import { BossHealthBar } from './BossHealthBar';
 import { BuildDock } from './BuildDock';
+import { Minimap } from './Minimap';
 import { ObjectivePanel } from './ObjectivePanel';
 import { SkillBar } from './SkillBar';
 import { StatusOverlay } from './StatusOverlay';
@@ -202,6 +203,9 @@ export default function AetherGame() {
 
       {/* LEFT TACTICAL AI LOGS & TIMERS */}
       {hud && status === 'playing' && <ObjectivePanel hud={hud} />}
+
+      {/* TACTICAL MINIMAP (hidden while the tech panel occupies the right rail) */}
+      {hud && status === 'playing' && !showTech && <Minimap snapshot={hud.minimap} />}
 
       {/* TECH TREE MODAL */}
       {hud && status === 'playing' && showTech && (
