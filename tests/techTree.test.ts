@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TARGET_WARP_AETHER, UPGRADES } from '@/constants/gameConfig';
+import { TARGET_WARP_AETHER, UPGRADES, WARP_TRANSFER_RATE } from '@/constants/gameConfig';
 import { getUpgradeCost, getUpgradeState, updateBuildings } from '@/engine/systems/buildingSystem';
 import { updateDrones } from '@/engine/systems/droneSystem';
 import { checkGameEnd, updateStorms, updateWarpProgress } from '@/engine/systems/environmentSystem';
@@ -139,8 +139,8 @@ describe('tech tree: upgrades modify real gameplay properties', () => {
     engine.resources.aether = 1000;
     engine.setAetherReserve(0);
     tick((dt) => updateWarpProgress(engine, dt), 1);
-    expect(engine.warpProgress).toBeCloseTo(12 * (1 + 2 * 0.45), 6);
-    expect(engine.resources.aether).toBeCloseTo(1000 - 12 * 1.9, 6);
+    expect(engine.warpProgress).toBeCloseTo(WARP_TRANSFER_RATE * (1 + 2 * 0.45), 6);
+    expect(engine.resources.aether).toBeCloseTo(1000 - WARP_TRANSFER_RATE * 1.9, 6);
   });
 
   it('victory still triggers at exactly 1,200 Aether with maxed capacitor', () => {
@@ -151,7 +151,7 @@ describe('tech tree: upgrades modify real gameplay properties', () => {
     tick((dt) => {
       updateWarpProgress(engine, dt);
       checkGameEnd(engine);
-    }, 120);
+    }, 1500);
     expect(engine.warpProgress).toBe(TARGET_WARP_AETHER);
     expect(engine.status).toBe('victory');
     expect(engine.resources.aether).toBeGreaterThanOrEqual(0);

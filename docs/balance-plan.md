@@ -20,7 +20,7 @@ The old `~175s` comment is not the result for its documented seed (`20261117`, a
 
 - Keep `TARGET_WARP_AETHER = 1200` and all phase thresholds unchanged.
 - Replace the hard-coded base transfer rate of **12 Aether/s** with `WARP_TRANSFER_RATE = 0.3` Aether/s.
-- Keep the capacitor bonus at **+45% per level**, so max level transfers at `0.3 × (1 + 4 × 0.45) = 0.975` Aether/s.
+- Keep the capacitor bonus at **+45% per level**, so max level transfers at `0.3 × (1 + 4 × 0.45) = 0.84` Aether/s.
 - Keep the 150-Aether default reserve and all lab, smelter, node, POI, pod, and objective income unchanged.
 
 This directly paces every phase without making finite nodes unable to support a longer run. It also makes capacitor levels meaningful throughout the campaign. The trade-off is a larger spendable Aether stockpile while transfer is slow; reserve semantics and exact-once income remain unchanged, and the longer combat exposure is measured rather than assumed harmless.
@@ -33,6 +33,20 @@ This directly paces every phase without making finite nodes unable to support a 
 - Keep wave count, composition, elite rules, and HP scaling unchanged.
 
 A 5–6× longer economy should not automatically mean 5–6× as many attacks. This keeps defense relevant while retaining a comparable number of preparation/recovery windows per campaign phase. The trade-off is fewer combat Aether drops and a later idle-player loss; both remain covered by the seeded simulation.
+
+## Measured result for the chosen levers
+
+The same five-seed harness produced the following Normal results after applying both levers:
+
+| Gameplay seed | Bot victory (s) | Final Hub HP | Bot waves | Idle loss (s) | Idle waves |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 20261117 | 1658.50 | 2767.60 | 13 | 319.40 | 2 |
+| 424242 | 1594.85 | 2552.20 | 12 | 322.00 | 2 |
+| 1 | 1626.20 | 2502.40 | 12 | 320.45 | 2 |
+| 90321 | 1586.65 | 2545.30 | 12 | 319.40 | 2 |
+| 8675309 | 1596.80 | 2519.80 | 12 | 322.75 | 2 |
+
+All measured victories are within 20–30 minutes (26.44–27.64 minutes). The balance assertion uses 1200–1800s, giving margin around the measured 1586.65–1658.50s range.
 
 ## Difficulty settings
 

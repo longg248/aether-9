@@ -1,9 +1,11 @@
 import {
   AETHER_RESERVE_MAX,
   AETHER_RESERVE_MIN,
+  CAMPAIGN_WAVE_INTERVAL_SCALE,
   DEFAULT_AETHER_RESERVE,
   HUB_X,
   HUB_Y,
+  INITIAL_WAVE_DELAY,
   PHASES,
   WORLD_SEED,
 } from '@/constants/gameConfig';
@@ -101,7 +103,7 @@ export class AetherGameEngine {
   public stormTimer = 140;
   public stormActive = false;
   public stormDuration = 0;
-  public waveTimer = 95;
+  public waveTimer = INITIAL_WAVE_DELAY * CAMPAIGN_WAVE_INTERVAL_SCALE;
   public waveCount = 0;
   public podTimer = 55;
   public bossSpawned = false;
@@ -160,7 +162,7 @@ export class AetherGameEngine {
     this.stormTimer = 140;
     this.stormActive = false;
     this.stormDuration = 0;
-    this.waveTimer = 95;
+    this.waveTimer = INITIAL_WAVE_DELAY * CAMPAIGN_WAVE_INTERVAL_SCALE;
     this.waveCount = 0;
     this.podTimer = 45;
     this.bossSpawned = false;

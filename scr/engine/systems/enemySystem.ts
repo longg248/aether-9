@@ -4,6 +4,7 @@ import {
   ACID_POOL_RADIUS,
   ACID_TICK_INTERVAL,
   BUILDING_COLLISION_RADIUS,
+  CAMPAIGN_WAVE_INTERVAL_SCALE,
   HUB_COLLISION_RADIUS,
   HUB_X,
   HUB_Y,
@@ -60,11 +61,11 @@ export interface WaveParams {
 }
 
 /** Pure, predictable difficulty curve — shared by the spawner and tests. */
-export function getWaveParams(waveCount: number): WaveParams {
+export function getWaveParams(waveCount: number, intervalScale = 1): WaveParams {
   return {
     count: Math.min(22, 4 + Math.floor(waveCount * 1.6)),
     hpScale: Math.min(WAVE_HP_SCALE_CAP, 1 + waveCount * 0.14),
-    nextWaveIn: Math.max(55, 110 - waveCount * 4),
+    nextWaveIn: Math.max(55, 110 - waveCount * 4) * intervalScale,
   };
 }
 
@@ -79,7 +80,7 @@ function damageBuilding(engine: AetherGameEngine, target: BuildingEntity, damage
 
 export function spawnEnemyWave(engine: AetherGameEngine): void {
   engine.waveCount++;
-  const params = getWaveParams(engine.waveCount);
+  const params = getWaveParams(engine.waveCount, CAMPAIGN_WAVE_INTERVAL_SCALE);
   engine.waveTimer = params.nextWaveIn;
   const side = Math.floor(engine.random.gameplay() * 4);
   engine.pushLog(`Cảnh báo: Đợt Bọ Tinh Thể #${engine.waveCount} đang tiến công!`, 'warn');
