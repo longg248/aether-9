@@ -5,6 +5,7 @@ import {
   ACID_TICK_INTERVAL,
   BUILDING_COLLISION_RADIUS,
   CAMPAIGN_WAVE_INTERVAL_SCALE,
+  DIFFICULTY_SETTINGS,
   HUB_COLLISION_RADIUS,
   HUB_X,
   HUB_Y,
@@ -80,7 +81,11 @@ function damageBuilding(engine: AetherGameEngine, target: BuildingEntity, damage
 
 export function spawnEnemyWave(engine: AetherGameEngine): void {
   engine.waveCount++;
-  const params = getWaveParams(engine.waveCount, CAMPAIGN_WAVE_INTERVAL_SCALE);
+  const difficulty = DIFFICULTY_SETTINGS[engine.difficulty];
+  const params = getWaveParams(
+    engine.waveCount,
+    CAMPAIGN_WAVE_INTERVAL_SCALE * difficulty.waveIntervalScale
+  );
   engine.waveTimer = params.nextWaveIn;
   const side = Math.floor(engine.random.gameplay() * 4);
   engine.pushLog(`Cảnh báo: Đợt Bọ Tinh Thể #${engine.waveCount} đang tiến công!`, 'warn');
@@ -111,7 +116,14 @@ export function spawnEnemyWave(engine: AetherGameEngine): void {
     if (engine.waveCount >= 7 && i % 5 === 3) type = 'spitter';
 
     const elite = engine.waveCount >= ELITE_WAVE_START && engine.random.gameplay() < ELITE_CHANCE;
-    createEnemy(engine, type, sx + (engine.random.gameplay() - 0.5) * 90, sy + (engine.random.gameplay() - 0.5) * 90, params.hpScale, elite);
+    createEnemy(
+      engine,
+      type,
+      sx + (engine.random.gameplay() - 0.5) * 90,
+      sy + (engine.random.gameplay() - 0.5) * 90,
+      params.hpScale,
+      elite
+    );
   }
 
   // Spawn Behemoth Boss in Phase 4+
@@ -135,11 +147,13 @@ export function createEnemy(
   scale: number,
   elite = false
 ): EnemyEntity {
+  // Apply difficulty centrally so waves, bosses, and POI ambushes share it.
+  const hpScale = scale * DIFFICULTY_SETTINGS[engine.difficulty].enemyHpScale;
   const stats: Record<EnemyType, { hp: number; speed: number; radius: number }> = {
-    swarmer: { hp: 55 * scale, speed: 68, radius: 12 },
-    goliath: { hp: 220 * scale, speed: 42, radius: 19 },
-    spitter: { hp: 85 * scale, speed: 52, radius: 14 },
-    behemoth: { hp: 2600, speed: 32, radius: 34 },
+    swarmer: { hp: 55 * hpScale, speed: 68, radius: 12 },
+    goliath: { hp: 220 * hpScale, speed: 42, radius: 19 },
+    spitter: { hp: 85 * hpScale, speed: 52, radius: 14 },
+    behemoth: { hp: 2600 * hpScale, speed: 32, radius: 34 },
   };
   const s = stats[type];
   const hp = elite ? s.hp * ELITE_HP_MULT : s.hp;

@@ -1,8 +1,9 @@
-import { HUB_X, HUB_Y } from '@/constants/gameConfig';
+import { DEFAULT_DIFFICULTY, DIFFICULTY_SETTINGS, Difficulty, HUB_X, HUB_Y } from '@/constants/gameConfig';
 import { Resources, RoverState } from '@/types/game';
 
-export function createInitialResources(): Resources {
-  return { silicate: 90, iron: 45, aether: 0 };
+export function createInitialResources(difficulty: Difficulty = DEFAULT_DIFFICULTY): Resources {
+  const scale = DIFFICULTY_SETTINGS[difficulty].startingResourceScale;
+  return { silicate: Math.round(90 * scale), iron: Math.round(45 * scale), aether: 0 };
 }
 
 export function createInitialUpgrades(): Record<string, number> {
