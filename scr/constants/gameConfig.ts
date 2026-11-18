@@ -8,6 +8,20 @@ export const HUB_GY = 22;
 export const HUB_X = (HUB_GX + 0.5) * TILE_SIZE;
 export const HUB_Y = (HUB_GY + 0.5) * TILE_SIZE;
 export const TARGET_WARP_AETHER = 1200;
+/** Base Warp transfer before capacitor upgrades; Normal campaign pacing. */
+export const WARP_TRANSFER_RATE = 0.3;
+/** Normal campaign spacing before the selected difficulty multiplier. */
+export const CAMPAIGN_WAVE_INTERVAL_SCALE = 1.5;
+export const INITIAL_WAVE_DELAY = 95;
+
+/** Pure difficulty multipliers applied on top of the Normal campaign baseline. */
+export const DIFFICULTY_SETTINGS = {
+  easy: { enemyHpScale: 0.8, waveIntervalScale: 1.2, startingResourceScale: 1.25 },
+  normal: { enemyHpScale: 1, waveIntervalScale: 1, startingResourceScale: 1 },
+  hard: { enemyHpScale: 1.25, waveIntervalScale: 0.85, startingResourceScale: 0.8 },
+} as const;
+export type Difficulty = keyof typeof DIFFICULTY_SETTINGS;
+export const DEFAULT_DIFFICULTY: Difficulty = 'normal';
 
 // Fixed world seed: POI layout is deterministic across runs (resource nodes
 // stay per-run random). Change only with a deliberate world-layout rebalance.

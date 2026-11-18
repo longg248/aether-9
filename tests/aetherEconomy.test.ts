@@ -15,7 +15,7 @@ describe('aether economy: warp reserve', () => {
     engine.resources.aether = 200;
     engine.setAetherReserve(150);
 
-    tick((dt) => updateWarpProgress(engine, dt), 30);
+    tick((dt) => updateWarpProgress(engine, dt), 200);
 
     expect(engine.resources.aether).toBeCloseTo(150, 5);
     expect(engine.warpProgress).toBeCloseTo(50, 5);
@@ -47,7 +47,7 @@ describe('aether economy: warp reserve', () => {
     engine.setAetherReserve(300);
     expect(engine.aetherReserve).toBe(300);
     engine.resources.aether = 400;
-    tick((dt) => updateWarpProgress(engine, dt), 30);
+    tick((dt) => updateWarpProgress(engine, dt), 400);
     expect(engine.resources.aether).toBeCloseTo(300, 5);
 
     engine.setAetherReserve(-50);
@@ -102,7 +102,7 @@ describe('aether economy: warp reserve', () => {
     expect(engine.resources.aether).toBe(frozen); // warp stops at once
 
     engine.setAetherReserve(0); // release everything mid-run
-    tick((dt) => updateWarpProgress(engine, dt), 60);
+    tick((dt) => updateWarpProgress(engine, dt), 1400);
     expect(engine.resources.aether).toBeCloseTo(0, 5);
     expect(engine.warpProgress).toBeCloseTo(400, 5);
   });
@@ -112,7 +112,7 @@ describe('aether economy: warp reserve', () => {
     engine.setAetherReserve(0);
     engine.resources.aether = 5000;
 
-    tick((dt) => updateWarpProgress(engine, dt), 200);
+    tick((dt) => updateWarpProgress(engine, dt), 4100);
 
     expect(engine.warpProgress).toBe(TARGET_WARP_AETHER);
     expect(engine.resources.aether).toBeCloseTo(3800, 5);
@@ -126,7 +126,7 @@ describe('aether economy: upgrades alongside warp consumption', () => {
     engine.resources.iron = 500;
     engine.resources.aether = 300;
 
-    tick((dt) => updateWarpProgress(engine, dt), 30);
+    tick((dt) => updateWarpProgress(engine, dt), 600);
     // Warp drained the surplus but left the reserve for the player.
     expect(engine.resources.aether).toBeCloseTo(DEFAULT_AETHER_RESERVE, 5);
     expect(engine.warpProgress).toBeGreaterThan(0);
@@ -163,7 +163,7 @@ describe('aether economy: upgrades alongside warp consumption', () => {
     engine.resources.iron = 500;
     engine.resources.aether = 160;
 
-    tick((dt) => updateWarpProgress(engine, dt), 10);
+    tick((dt) => updateWarpProgress(engine, dt), 40);
     expect(engine.resources.aether).toBeCloseTo(150, 5);
 
     buyUpgrade(engine, 'aether_capacitor'); // -90 → 60 left
@@ -227,7 +227,7 @@ describe('aether economy: HUD semantics (spendable / surplus / reserve)', () => 
     expect(hud.resources.aether).toBe(260);
     expect(hud.warpSurplus).toBe(110);
 
-    tick((dt) => updateWarpProgress(engine, dt), 30);
+    tick((dt) => updateWarpProgress(engine, dt), 400);
     expect(engine.resources.aether).toBeCloseTo(150, 5);
     expect(engine.warpProgress).toBeCloseTo(110, 5);
     expect(engine.getHudSnapshot().warpSurplus).toBeCloseTo(0, 5);

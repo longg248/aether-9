@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HUB_X, TILE_SIZE } from '@/constants/gameConfig';
+import { CAMPAIGN_WAVE_INTERVAL_SCALE, HUB_X, TILE_SIZE } from '@/constants/gameConfig';
 import {
   WAVE_HP_SCALE_CAP,
   getWaveParams,
@@ -53,7 +53,7 @@ describe('wave progression: predictable difficulty curve', () => {
     engine.waveTimer = 0;
     updateEnemies(engine, 0.05);
 
-    const params = getWaveParams(1);
+    const params = getWaveParams(1, CAMPAIGN_WAVE_INTERVAL_SCALE);
     expect(engine.waveCount).toBe(1);
     expect(engine.enemies).toHaveLength(params.count);
     expect(engine.waveTimer).toBe(params.nextWaveIn);

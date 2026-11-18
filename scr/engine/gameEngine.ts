@@ -1,9 +1,14 @@
 import {
   AETHER_RESERVE_MAX,
   AETHER_RESERVE_MIN,
+  CAMPAIGN_WAVE_INTERVAL_SCALE,
   DEFAULT_AETHER_RESERVE,
+  DEFAULT_DIFFICULTY,
+  DIFFICULTY_SETTINGS,
+  Difficulty,
   HUB_X,
   HUB_Y,
+  INITIAL_WAVE_DELAY,
   PHASES,
   WORLD_SEED,
 } from '@/constants/gameConfig';
@@ -60,6 +65,7 @@ export class AetherGameEngine {
   public readonly terrain: TerrainData;
   /** Seeded worldgen streams + per-run gameplay stream (see RandomService). */
   public random: RandomService;
+  public difficulty: Difficulty;
 
   public status: GameStatus = 'intro';
   /** Incremented on every reset so renderers can detect a new run. */
@@ -101,7 +107,7 @@ export class AetherGameEngine {
   public stormTimer = 140;
   public stormActive = false;
   public stormDuration = 0;
-  public waveTimer = 95;
+  public waveTimer = INITIAL_WAVE_DELAY * CAMPAIGN_WAVE_INTERVAL_SCALE;
   public waveCount = 0;
   public podTimer = 55;
   public bossSpawned = false;
@@ -113,7 +119,8 @@ export class AetherGameEngine {
 
   public logs: { id: string; text: string; type: 'info' | 'warn' | 'ai' | 'good' }[] = [];
 
-  constructor(worldSeed: number = WORLD_SEED) {
+  constructor(worldSeed: number = WORLD_SEED, difficulty: Difficulty = DEFAULT_DIFFICULTY) {
+    this.difficulty = difficulty;
     this.terrain = generateTerrainData();
     this.random = new RandomService(worldSeed);
     this.reset();
@@ -125,7 +132,7 @@ export class AetherGameEngine {
     this.random = new RandomService(this.random.worldSeed);
     this.elapsed = 0;
     this.dayTime = 0.22;
-    this.resources = createInitialResources();
+    this.resources = createInitialResources(this.difficulty);
     this.aetherReserve = DEFAULT_AETHER_RESERVE;
     this.hubHp = 1200;
     this.hubMaxHp = 1200;
@@ -160,7 +167,10 @@ export class AetherGameEngine {
     this.stormTimer = 140;
     this.stormActive = false;
     this.stormDuration = 0;
-    this.waveTimer = 95;
+    this.waveTimer =
+      INITIAL_WAVE_DELAY *
+      CAMPAIGN_WAVE_INTERVAL_SCALE *
+      DIFFICULTY_SETTINGS[this.difficulty].waveIntervalScale;
     this.waveCount = 0;
     this.podTimer = 45;
     this.bossSpawned = false;

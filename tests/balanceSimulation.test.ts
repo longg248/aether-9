@@ -104,11 +104,11 @@ function playTick(engine: AetherGameEngine): void {
   }
 }
 
-// Measured baselines (seed 20261117, dt 0.05, the scripted policy below):
-// - Competent bot: victory at ~175s with hubHp ~300 after 1 wave. This is a
-//   LOWER bound: the bot has full map knowledge (no fog-of-war exploration)
-//   and perfect micro; human runs are longer.
-// - Idle player: gameover at ~322s after 3 waves — defense is mandatory.
+// Measured Normal baselines (five gameplay seeds, dt 0.05, policy below):
+// - Competent bot: victory at 1586.65–1658.50s, final hubHp 2502.40–2767.60,
+//   after 12–13 waves. Full map knowledge and perfect micro make this a bot
+//   measurement, not an estimate of human completion time.
+// - Idle player: gameover at 319.40–322.75s after 2 waves — defense is mandatory.
 // - Stress (separate measurement): 30 drones / 60 enemies / 90 buildings
 //   ≈ 2ms per update step in jsdom, far inside the 16.6ms frame budget.
 describe('balance: full gameplay loop simulation (seeded, deterministic)', () => {
@@ -137,10 +137,9 @@ describe('balance: full gameplay loop simulation (seeded, deterministic)', () =>
 
     expect(engine.status).toBe('victory');
     expect(engine.warpProgress).toBe(TARGET_WARP_AETHER);
-    // The bot has full map knowledge and perfect micro, so ~3 min is a LOWER
-    // bound; human runs include exploration and defense management. The upper
-    // bound guards against excessive grinding.
-    expect(victoryAt).toBeGreaterThan(120); // requires a real economic ramp-up
+    // Bracket the measured five-seed range (1586.65–1658.50s) with margin.
+    // The bot has full map knowledge and perfect micro; this is not a human ETA.
+    expect(victoryAt).toBeGreaterThan(1200); // real 20+ minute economic ramp-up
     expect(victoryAt).toBeLessThan(1800); // no excessive grind (~30 min cap)
     expect(engine.waveCount).toBeGreaterThanOrEqual(1); // faced real waves
     expect(engine.hubHp).toBeGreaterThan(0);

@@ -1,4 +1,4 @@
-import { GRID_SIZE, HUB_GX, HUB_GY, HUB_X, HUB_Y, PHASES, TARGET_WARP_AETHER, TILE_SIZE } from '@/constants/gameConfig';
+import { GRID_SIZE, HUB_GX, HUB_GY, HUB_X, HUB_Y, PHASES, TARGET_WARP_AETHER, TILE_SIZE, WARP_TRANSFER_RATE } from '@/constants/gameConfig';
 import type { AetherGameEngine } from '@/engine/gameEngine';
 import { soundEngine } from '@/utils/soundEngine';
 
@@ -49,7 +49,7 @@ export function updateWarpProgress(engine: AetherGameEngine, dt: number): void {
   const available = engine.resources.aether - engine.aetherReserve;
   if (available > 0 && engine.warpProgress < TARGET_WARP_AETHER) {
     // +45% charge rate per capacitor level, matching the tech tree description.
-    const rate = 12 * (1 + engine.upgrades.aether_capacitor * 0.45) * dt;
+    const rate = WARP_TRANSFER_RATE * (1 + engine.upgrades.aether_capacitor * 0.45) * dt;
     const transfer = Math.min(available, rate, TARGET_WARP_AETHER - engine.warpProgress);
     engine.resources.aether -= transfer;
     engine.warpProgress += transfer;
